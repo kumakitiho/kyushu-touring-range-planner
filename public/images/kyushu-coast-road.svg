@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-label="海沿いロードのイメージ">
+  <rect width="640" height="420" fill="#e0f2fe"/>
+  <path d="M0 218c91-48 166-49 226-4s122 47 188 8 145-48 226-1v199H0Z" fill="#38bdf8"/>
+  <path d="M0 278c84-32 166-34 247-7s155 25 230-10 129-30 163-11v170H0Z" fill="#0ea5e9"/>
+  <path d="M18 392c119-129 254-197 405-205 60-3 120 3 180 18" fill="none" stroke="#0f172a" stroke-width="54" stroke-linecap="round"/>
+  <path d="M19 392c119-129 254-197 405-205 60-3 120 3 180 18" fill="none" stroke="#f8fafc" stroke-width="8" stroke-linecap="round" stroke-dasharray="22 24"/>
+  <circle cx="514" cy="80" r="52" fill="#fde68a"/>
+  <path d="M78 161h120l-27-42 45 42h84l-50-72 90 72h74" fill="none" stroke="#0369a1" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="52" y="78" fill="#075985" font-family="sans-serif" font-size="36" font-weight="800">COAST ROAD</text>
+</svg>

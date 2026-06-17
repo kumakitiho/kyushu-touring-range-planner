@@ -1,0 +1,17 @@
+{
+  "name": "九州ツーリングレンジプランナー",
+  "short_name": "九州ツーリング",
+  "description": "現在地や指定地点から走れる範囲で日帰りツーリングプランを提案します。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
