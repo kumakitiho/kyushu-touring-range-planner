@@ -324,7 +324,12 @@ button {
   margin-top: 10px;
 }
 
-.highway-grid button {
+.generation-grid {
+  grid-template-columns: 1fr;
+}
+
+.highway-grid button,
+.generation-grid button {
   display: grid;
   justify-items: start;
   gap: 2px;
@@ -332,10 +337,81 @@ button {
   text-align: left;
 }
 
-.highway-grid span {
+.highway-grid span,
+.generation-grid span {
   font-size: 12px;
   font-weight: 600;
   opacity: 0.75;
+}
+
+.codex-card,
+.login-card {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f1f5f9;
+}
+
+.codex-card {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.codex-card strong,
+.codex-card span,
+.login-card span,
+.login-card strong {
+  display: block;
+}
+
+.codex-card span,
+.login-card span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.codex-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.small-button {
+  min-height: 38px;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #0f172a;
+  background: #e2e8f0;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.small-button.primary {
+  color: #fff;
+  background: #0f172a;
+}
+
+.small-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.login-card a {
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.login-card strong {
+  width: fit-content;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #0f172a;
+  background: #fff;
+  font-size: 18px;
+  letter-spacing: 0;
 }
 
 .generate-button {
@@ -353,6 +429,13 @@ button {
   background: #e0f2fe;
   font-size: 12px;
   font-weight: 800;
+}
+
+.fallback-note {
+  margin: -4px 0 0;
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .plan-card {

@@ -8,6 +8,8 @@ export const highwayModes = [
   "local_only_after_highway"
 ] as const;
 
+export const generationModes = ["auto", "codex", "local"] as const;
+
 export const SpotImageSchema = z.object({
   url: z.string().min(1),
   alt: z.string(),
@@ -49,7 +51,8 @@ export const PlanRequestSchema = z.object({
     relaxed: z.number().min(0).max(5)
   }),
   tripStyle: z.enum(["half_day", "day_trip"]),
-  count: z.number().int().min(1).max(4)
+  count: z.number().int().min(1).max(4),
+  generationMode: z.enum(generationModes).default("auto")
 });
 
 export const PlanStopSchema = z.object({
@@ -75,7 +78,7 @@ export const PlanSchema = z.object({
   routeLine: z.array(z.tuple([z.number(), z.number()])),
   highlights: z.array(z.string()),
   cautions: z.array(z.string()),
-  source: z.enum(["ai", "fallback"])
+  source: z.enum(["codex", "local"])
 });
 
 export const PlanResponseSchema = z.object({
@@ -87,10 +90,19 @@ export const PlanResponseSchema = z.object({
     coordinates: z.array(z.tuple([z.number(), z.number()]))
   }),
   candidates: z.array(SpotSchema),
-  mode: z.enum(["ai", "fallback"])
+  mode: z.enum(["codex", "local"]),
+  fallbackReason: z.string().optional(),
+  providerStatus: z
+    .object({
+      codexAvailable: z.boolean(),
+      authMode: z.string().nullable(),
+      planType: z.string().nullable()
+    })
+    .optional()
 });
 
 export type HighwayMode = (typeof highwayModes)[number];
+export type GenerationMode = (typeof generationModes)[number];
 export type Spot = z.infer<typeof SpotSchema>;
 export type PlanRequest = z.infer<typeof PlanRequestSchema>;
 export type PlanResponse = z.infer<typeof PlanResponseSchema>;

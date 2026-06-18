@@ -2,11 +2,13 @@ import cors from "cors";
 import express from "express";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { buildFallbackPlans } from "./planner";
+import { AppServerCodexProvider, type CodexPlanProvider } from "./codexProvider";
+import { buildPlansWithMode } from "./planService";
 import { PlanRequestSchema } from "../src/shared/types";
 
-export function createApp(options: { distPath?: string | false } = {}) {
+export function createApp(options: { distPath?: string | false; codexProvider?: CodexPlanProvider } = {}) {
   const app = express();
+  const codexProvider = options.codexProvider ?? new AppServerCodexProvider();
   app.use(
     cors({
       origin: (origin, callback) => {
@@ -25,11 +27,20 @@ export function createApp(options: { distPath?: string | false } = {}) {
       ok: true,
       providers: {
         openai: false,
+        codexAppServer: true,
         openrouteservice: Boolean(process.env.OPENROUTESERVICE_API_KEY),
         localSpots: true,
         fallback: true
       }
     });
+  });
+
+  app.get("/api/codex/status", async (_request, response) => {
+    response.json(await codexProvider.getStatus());
+  });
+
+  app.post("/api/codex/login/start", async (_request, response) => {
+    response.json(await codexProvider.startLogin());
   });
 
   app.post("/api/plans", rateLimitPlans(), async (request, response) => {
@@ -39,7 +50,7 @@ export function createApp(options: { distPath?: string | false } = {}) {
       return;
     }
 
-    response.json(await buildFallbackPlans(parsed.data));
+    response.json(await buildPlansWithMode(parsed.data, codexProvider));
   });
 
   const distPath = options.distPath === false ? "" : options.distPath ?? path.resolve(process.cwd(), "dist");

@@ -82,7 +82,7 @@ export function filterCandidates(request: PlanRequest): Spot[] {
     .map(({ spot }) => spot);
 }
 
-export async function buildFallbackPlans(request: PlanRequest, count = request.count): Promise<PlanResponse> {
+export async function buildLocalPlans(request: PlanRequest, count = request.count): Promise<PlanResponse> {
   const origin: LatLngTuple = [request.origin.lat, request.origin.lng];
   const radiusKm = radiusFromConstraint(request);
   const candidates = filterCandidates(request);
@@ -93,6 +93,20 @@ export async function buildFallbackPlans(request: PlanRequest, count = request.c
     if (plan && !sameStopSignature(plans, plan)) plans.push(plan);
   }
 
+  return buildPlanResponse(request, candidates, plans, "local");
+}
+
+export const buildFallbackPlans = buildLocalPlans;
+
+export function buildPlanResponse(
+  request: PlanRequest,
+  candidates: Spot[],
+  plans: Plan[],
+  mode: PlanResponse["mode"],
+  extra: Pick<PlanResponse, "fallbackReason" | "providerStatus"> = {}
+): PlanResponse {
+  const origin: LatLngTuple = [request.origin.lat, request.origin.lng];
+  const radiusKm = radiusFromConstraint(request);
   return {
     plans,
     reachableArea: {
@@ -102,7 +116,8 @@ export async function buildFallbackPlans(request: PlanRequest, count = request.c
       coordinates: circlePolygon(origin, radiusKm)
     },
     candidates,
-    mode: "fallback"
+    mode,
+    ...extra
   };
 }
 
@@ -115,7 +130,7 @@ export async function buildPlanFromSpotIds(
     highlights?: string[];
     cautions?: string[];
   } = {},
-  source: Plan["source"] = "fallback",
+  source: Plan["source"] = "local",
   allowedSpotIds?: Set<string>
 ): Promise<Plan | null> {
   const uniqueIds = Array.from(new Set(spotIds)).slice(0, 5);
@@ -142,7 +157,7 @@ async function buildPlan(request: PlanRequest, candidates: Spot[], planIndex: nu
     return angularDistanceDeg(anchorBearing, bearing) <= 55;
   });
   const selected = orderStopsForOutAndBack(origin, pickBalancedStops(origin, anchor, sameDirection, request, targetStops));
-  return planFromStops(request, selected, {}, "fallback");
+  return planFromStops(request, selected, {}, "local");
 }
 
 async function planFromStops(
@@ -154,7 +169,7 @@ async function planFromStops(
     highlights?: string[];
     cautions?: string[];
   } = {},
-  source: Plan["source"] = "fallback"
+  source: Plan["source"] = "local"
 ): Promise<Plan | null> {
   if (selected.length === 0) return null;
   const origin: LatLngTuple = [request.origin.lat, request.origin.lng];

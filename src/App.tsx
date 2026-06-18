@@ -1,6 +1,7 @@
 import L, { type CircleMarker, type LatLngExpression, type Map as LeafletMap, type Polyline } from "leaflet";
 import {
   Bike,
+  Bot,
   ChevronDown,
   Crosshair,
   ImageOff,
@@ -15,11 +16,26 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { routeAtProgress, routeHead } from "./lib/routeAnimation";
-import type { HighwayMode, Plan, PlanRequest, PlanResponse, PlanStop } from "./shared/types";
+import type { GenerationMode, HighwayMode, Plan, PlanRequest, PlanResponse, PlanStop } from "./shared/types";
 
 type Tab = "input" | "plans" | "spot";
 type GeoState = "idle" | "requesting" | "granted" | "denied" | "unavailable" | "timeout" | "low_accuracy";
 type SheetMode = "peek" | "mid" | "full";
+type CodexStatus = {
+  codexAvailable: boolean;
+  authMode: string | null;
+  planType: string | null;
+  loginState?: string;
+  message?: string;
+};
+type CodexLoginStart = {
+  type: "chatgptDeviceCode" | "chatgpt" | "unavailable";
+  loginId?: string;
+  verificationUrl?: string;
+  userCode?: string;
+  authUrl?: string;
+  message?: string;
+};
 
 const presets = [
   { label: "福岡・天神", lat: 33.5902, lng: 130.4017 },
@@ -41,6 +57,12 @@ const highwayOptions: Array<{ value: HighwayMode; label: string; hint: string }>
   { value: "local_only_after_highway", label: "現地は下道", hint: "ワープして走る" }
 ];
 
+const generationOptions: Array<{ value: GenerationMode; label: string; hint: string }> = [
+  { value: "auto", label: "自動", hint: "Codex優先、失敗時ローカル" },
+  { value: "codex", label: "Codex", hint: "ChatGPT枠で候補選定" },
+  { value: "local", label: "ローカル", hint: "収集済みJSONのみ" }
+];
+
 export function App() {
   const [origin, setOrigin] = useState(defaultOrigin);
   const [constraintType, setConstraintType] = useState<"distance" | "duration">("duration");
@@ -48,6 +70,10 @@ export function App() {
   const [highwayMode, setHighwayMode] = useState<HighwayMode>("local_only_after_highway");
   const [preferences, setPreferences] = useState({ gourmet: 4, scenic: 4, road: 5, relaxed: 2 });
   const [tripStyle, setTripStyle] = useState<"half_day" | "day_trip">("day_trip");
+  const [generationMode, setGenerationMode] = useState<GenerationMode>("auto");
+  const [codexStatus, setCodexStatus] = useState<CodexStatus | null>(null);
+  const [codexLogin, setCodexLogin] = useState<CodexLoginStart | null>(null);
+  const [isCodexLoginLoading, setIsCodexLoginLoading] = useState(false);
   const [planResponse, setPlanResponse] = useState<PlanResponse | null>(null);
   const [selectedPlanIndex, setSelectedPlanIndex] = useState(0);
   const [selectedSpot, setSelectedSpot] = useState<PlanStop | null>(null);
@@ -224,7 +250,8 @@ export function App() {
       routeOptions: { highwayMode },
       preferences,
       tripStyle,
-      count: 3
+      count: 3,
+      generationMode
     };
 
     try {
@@ -243,11 +270,44 @@ export function App() {
       setSheetMode("mid");
       setRouteProgress(0);
       setIsPlaying(true);
-      setMessage("収集済みスポットからローカル提案を表示しています。");
+      setCodexStatus(data.providerStatus ? { ...data.providerStatus } : codexStatus);
+      setMessage(messageForPlanResponse(data));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "プラン生成に失敗しました。");
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function refreshCodexStatus(showMessage = true) {
+    try {
+      const response = await fetch("/api/codex/status");
+      const data = (await response.json()) as CodexStatus;
+      setCodexStatus(data);
+      if (showMessage) setMessage(statusMessage(data));
+    } catch {
+      const unavailable = { codexAvailable: false, authMode: null, planType: null, message: "Codex状態を確認できませんでした。" };
+      setCodexStatus(unavailable);
+      if (showMessage) setMessage(unavailable.message);
+    }
+  }
+
+  async function startCodexLogin() {
+    setIsCodexLoginLoading(true);
+    setMessage("Codexログインを開始しています。");
+    try {
+      const response = await fetch("/api/codex/login/start", { method: "POST" });
+      const data = (await response.json()) as CodexLoginStart;
+      setCodexLogin(data);
+      if (data.type === "unavailable") {
+        setMessage(data.message || "Codexログインを開始できませんでした。");
+      } else {
+        setMessage("表示された手順でChatGPTログインを完了してください。");
+      }
+    } catch {
+      setMessage("Codexログインを開始できませんでした。");
+    } finally {
+      setIsCodexLoginLoading(false);
     }
   }
 
@@ -389,6 +449,9 @@ export function App() {
               highwayMode={highwayMode}
               preferences={preferences}
               tripStyle={tripStyle}
+              generationMode={generationMode}
+              codexStatus={codexStatus}
+              codexLogin={codexLogin}
               onUseCurrentLocation={useCurrentLocation}
               onOriginChange={setOrigin}
               onConstraintTypeChange={setConstraintType}
@@ -396,8 +459,12 @@ export function App() {
               onHighwayModeChange={setHighwayMode}
               onPreferencesChange={setPreferences}
               onTripStyleChange={setTripStyle}
+              onGenerationModeChange={setGenerationMode}
+              onStartCodexLogin={startCodexLogin}
+              onRefreshCodexStatus={() => refreshCodexStatus(true)}
               onGenerate={generatePlans}
               isLoading={isLoading}
+              isCodexLoginLoading={isCodexLoginLoading}
             />
           )}
           {activeTab === "plans" && (
@@ -426,6 +493,9 @@ function InputPanel(props: {
   highwayMode: HighwayMode;
   preferences: PlanRequest["preferences"];
   tripStyle: "half_day" | "day_trip";
+  generationMode: GenerationMode;
+  codexStatus: CodexStatus | null;
+  codexLogin: CodexLoginStart | null;
   onUseCurrentLocation: () => void;
   onOriginChange: (origin: Origin) => void;
   onConstraintTypeChange: (type: "distance" | "duration") => void;
@@ -433,8 +503,12 @@ function InputPanel(props: {
   onHighwayModeChange: (mode: HighwayMode) => void;
   onPreferencesChange: (preferences: PlanRequest["preferences"]) => void;
   onTripStyleChange: (style: "half_day" | "day_trip") => void;
+  onGenerationModeChange: (mode: GenerationMode) => void;
+  onStartCodexLogin: () => void;
+  onRefreshCodexStatus: () => void;
   onGenerate: () => void;
   isLoading: boolean;
+  isCodexLoginLoading: boolean;
 }) {
   return (
     <div className="panel-stack">
@@ -530,6 +604,56 @@ function InputPanel(props: {
 
       <section className="form-section">
         <div className="section-title">
+          <Bot size={18} />
+          <h2>生成モード</h2>
+        </div>
+        <div className="segmented generation-grid">
+          {generationOptions.map((option) => (
+            <button
+              key={option.value}
+              className={props.generationMode === option.value ? "active" : ""}
+              onClick={() => props.onGenerationModeChange(option.value)}
+            >
+              <strong>{option.label}</strong>
+              <span>{option.hint}</span>
+            </button>
+          ))}
+        </div>
+        <div className="codex-card">
+          <div>
+            <strong>{codexStatusLabel(props.codexStatus)}</strong>
+            <span>{codexStatusDetail(props.codexStatus)}</span>
+          </div>
+          <div className="codex-actions">
+            <button className="small-button" onClick={props.onRefreshCodexStatus}>
+              更新
+            </button>
+            <button className="small-button primary" onClick={props.onStartCodexLogin} disabled={props.isCodexLoginLoading}>
+              {props.isCodexLoginLoading ? "開始中" : "ログイン"}
+            </button>
+          </div>
+        </div>
+        {props.codexLogin?.type === "chatgptDeviceCode" && (
+          <div className="login-card">
+            <span>以下のURLでコードを入力</span>
+            <a href={props.codexLogin.verificationUrl} target="_blank" rel="noreferrer">
+              {props.codexLogin.verificationUrl}
+            </a>
+            <strong>{props.codexLogin.userCode}</strong>
+          </div>
+        )}
+        {props.codexLogin?.type === "chatgpt" && (
+          <div className="login-card">
+            <span>ブラウザでChatGPTログイン</span>
+            <a href={props.codexLogin.authUrl} target="_blank" rel="noreferrer">
+              ログイン画面を開く
+            </a>
+          </div>
+        )}
+      </section>
+
+      <section className="form-section">
+        <div className="section-title">
           <Bike size={18} />
           <h2>好み</h2>
         </div>
@@ -592,7 +716,10 @@ function PlanList(props: {
 
   return (
     <div className="plan-list">
-      <p className="mode-pill">ローカル提案 / ルートは目安</p>
+      <p className="mode-pill">
+        {props.response.mode === "codex" ? "Codex提案" : "ローカル提案"} / ルートは目安
+      </p>
+      {props.response.fallbackReason && <p className="fallback-note">{props.response.fallbackReason}</p>}
       {props.response.plans.map((plan, index) => (
         <article key={plan.title} className={`plan-card ${props.selectedIndex === index ? "selected" : ""}`}>
           <button className="plan-main" onClick={() => props.onSelectPlan(plan, index)}>
@@ -661,6 +788,32 @@ function SpotImage({ stop, large = false }: { stop?: Pick<PlanStop, "name" | "ca
     );
   }
   return <img className={`spot-image ${large ? "large" : ""}`} src={image.url} alt={image.alt || stop?.name} onError={() => setFailed(true)} loading="lazy" />;
+}
+
+function messageForPlanResponse(response: PlanResponse) {
+  if (response.mode === "codex") return "Codexが選んだスポットをサーバーで検証して表示しています。";
+  if (response.fallbackReason) return `${response.fallbackReason} ローカル提案を表示しています。`;
+  return "収集済みスポットからローカル提案を表示しています。";
+}
+
+function statusMessage(status: CodexStatus) {
+  if (!status.codexAvailable) return status.message || "Codex app-serverを利用できません。";
+  if (status.authMode === "chatgpt") return `Codexログイン済みです${status.planType ? `（${status.planType}）` : ""}。`;
+  return "Codexは未ログインです。自動モードではローカル生成に切り替わります。";
+}
+
+function codexStatusLabel(status: CodexStatus | null) {
+  if (!status) return "Codex状態を確認中";
+  if (!status.codexAvailable) return "Codex利用不可";
+  if (status.authMode === "chatgpt") return "Codexログイン済み";
+  return "Codex未ログイン";
+}
+
+function codexStatusDetail(status: CodexStatus | null) {
+  if (!status) return "自動モードは確認後に利用します";
+  if (!status.codexAvailable) return status.message || "app-serverを起動できません";
+  if (status.authMode === "chatgpt") return status.planType ? `ChatGPT ${status.planType}` : "ChatGPT認証";
+  return "未ログイン時はローカルJSONで生成します";
 }
 
 function sourceLabel(source: string) {

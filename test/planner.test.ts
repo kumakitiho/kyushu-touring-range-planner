@@ -27,8 +27,9 @@ describe("planner fallback", () => {
   it("returns schema-valid fallback plans without API keys", async () => {
     const response = await buildFallbackPlans(baseRequest);
     expect(() => PlanResponseSchema.parse(response)).not.toThrow();
-    expect(response.mode).toBe("fallback");
+    expect(response.mode).toBe("local");
     expect(response.plans[0].routeSource).toBe("fallback");
+    expect(response.plans[0].source).toBe("local");
     expect(response.plans.length).toBeGreaterThan(0);
     expect(response.plans[0].routeLine[0]).toEqual([baseRequest.origin.lat, baseRequest.origin.lng]);
   });
