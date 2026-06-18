@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { routeAtProgress, routeHead } from "./lib/routeAnimation";
-import type { GenerationMode, HighwayMode, Plan, PlanRequest, PlanResponse, PlanStop } from "./shared/types";
+import type { GenerationMode, HighwayMode, Plan, PlanRequest, PlanResponse, PlanStop, PreferenceLevel } from "./shared/types";
 
 type Tab = "input" | "plans" | "spot";
 type GeoState = "idle" | "requesting" | "granted" | "denied" | "unavailable" | "timeout" | "low_accuracy";
@@ -49,6 +49,13 @@ type Origin = PlanRequest["origin"];
 
 const defaultOrigin: Origin = { ...presets[0], source: "preset" };
 
+const defaultPreferences: PlanRequest["preferences"] = {
+  gourmet: "medium",
+  scenic: "medium",
+  road: "high",
+  relaxed: "low"
+};
+
 const highwayOptions: Array<{ value: HighwayMode; label: string; hint: string }> = [
   { value: "none", label: "下道のみ", hint: "近場と快走路を優先" },
   { value: "full", label: "高速あり", hint: "遠方候補も出す" },
@@ -63,12 +70,19 @@ const generationOptions: Array<{ value: GenerationMode; label: string; hint: str
   { value: "local", label: "ローカル", hint: "収集済みJSONのみ" }
 ];
 
+const loadingMessages = [
+  "条件に合う候補スポットを絞り込んでいます",
+  "同じ方面にまとまる立ち寄り順を見ています",
+  "道路ルートと所要時間を確認しています",
+  "好みに合う理由と旅程メモを整えています"
+];
+
 export function App() {
   const [origin, setOrigin] = useState(defaultOrigin);
   const [constraintType, setConstraintType] = useState<"distance" | "duration">("duration");
   const [constraintValue, setConstraintValue] = useState(240);
   const [highwayMode, setHighwayMode] = useState<HighwayMode>("local_only_after_highway");
-  const [preferences, setPreferences] = useState({ gourmet: 4, scenic: 4, road: 5, relaxed: 2 });
+  const [preferences, setPreferences] = useState<PlanRequest["preferences"]>(defaultPreferences);
   const [tripStyle, setTripStyle] = useState<"half_day" | "day_trip">("day_trip");
   const [generationMode, setGenerationMode] = useState<GenerationMode>("auto");
   const [codexStatus, setCodexStatus] = useState<CodexStatus | null>(null);
@@ -82,6 +96,7 @@ export function App() {
   const [geoState, setGeoState] = useState<GeoState>("idle");
   const [message, setMessage] = useState("地図をタップすると手動で出発地点を置けます。");
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
   const [routeProgress, setRouteProgress] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -97,6 +112,18 @@ export function App() {
   const fittedPlanKeyRef = useRef<string>("");
 
   const selectedPlan = planResponse?.plans[selectedPlanIndex] ?? null;
+  const activeSpotId = selectedSpot?.spotId ?? selectedPlan?.stops[0]?.spotId ?? null;
+
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingStep(0);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setLoadingStep((step) => (step + 1) % loadingMessages.length);
+    }, 1300);
+    return () => window.clearInterval(timer);
+  }, [isLoading]);
 
   useEffect(() => {
     if (!mapElement.current || mapRef.current) return;
@@ -155,12 +182,15 @@ export function App() {
     }
 
     planResponse?.candidates.forEach((spot) => {
+      const isPlanStop = selectedPlan?.stops.some((stop) => stop.spotId === spot.id) ?? false;
+      const isActive = activeSpotId === spot.id;
       L.circleMarker([spot.lat, spot.lng], {
-        radius: selectedPlan?.stops.some((stop) => stop.spotId === spot.id) ? 8 : 5,
+        radius: isActive ? 13 : isPlanStop ? 8 : 5,
         color: categoryColor(spot.category),
         fillColor: categoryColor(spot.category),
-        fillOpacity: 0.9,
-        weight: 2
+        fillOpacity: isActive ? 1 : 0.9,
+        weight: isActive ? 5 : 2,
+        opacity: isActive ? 1 : 0.9
       })
         .bindPopup(`<strong>${spot.name}</strong><br>${spot.area}<br>${spot.description}`)
         .addTo(layers);
@@ -174,7 +204,16 @@ export function App() {
       });
       fittedPlanKeyRef.current = planKey(selectedPlan);
     }
-  }, [origin, planResponse, selectedPlan, sheetMode]);
+  }, [origin, planResponse, selectedPlan, sheetMode, activeSpotId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedSpot) return;
+    map.flyTo([selectedSpot.lat, selectedSpot.lng], Math.max(map.getZoom(), 10), {
+      animate: true,
+      duration: 0.75
+    });
+  }, [selectedSpot]);
 
   useEffect(() => {
     const routeLayer = routeLayerRef.current;
@@ -240,6 +279,7 @@ export function App() {
 
   async function generatePlans() {
     setIsLoading(true);
+    setLoadingStep(0);
     setMessage("プランを組み立てています。");
     const request: PlanRequest = {
       origin,
@@ -264,6 +304,7 @@ export function App() {
       const data = (await response.json()) as PlanResponse;
       setPlanResponse(data);
       setSelectedPlanIndex(0);
+      setSelectedSpot(data.plans[0]?.stops[0] ?? null);
       fittedPlanKeyRef.current = "";
       routeProgressRef.current = 0;
       setActiveTab("plans");
@@ -396,6 +437,13 @@ export function App() {
     <main className="app-shell">
       <section className="map-stage" aria-label="ツーリングマップ">
         <div ref={mapElement} className="map-canvas" />
+        {isLoading && (
+          <div className="loading-overlay" role="status" aria-live="polite">
+            <div className="loading-spinner" />
+            <strong>プラン生成中</strong>
+            <span>{loadingMessages[loadingStep]}</span>
+          </div>
+        )}
         <div className="top-bar">
           <div>
             <p className="eyebrow">Kyushu Touring</p>
@@ -435,7 +483,7 @@ export function App() {
             提案
           </button>
           <button className={activeTab === "spot" ? "active" : ""} onClick={() => setActiveTab("spot")}>
-            詳細
+            旅程
           </button>
         </nav>
 
@@ -472,13 +520,14 @@ export function App() {
               response={planResponse}
               selectedIndex={selectedPlanIndex}
               onSelectPlan={selectPlan}
-              onSelectSpot={(spot) => {
+              onSelectSpot={(spot, plan, index) => {
+                selectPlan(plan, index);
                 setSelectedSpot(spot);
                 setActiveTab("spot");
               }}
             />
           )}
-          {activeTab === "spot" && <SpotDetail spot={selectedSpot ?? selectedPlan?.stops[0] ?? null} />}
+          {activeTab === "spot" && <PlanItinerary plan={selectedPlan} selectedSpot={selectedSpot} onSelectSpot={setSelectedSpot} />}
         </div>
       </section>
     </main>
@@ -657,10 +706,10 @@ function InputPanel(props: {
           <Bike size={18} />
           <h2>好み</h2>
         </div>
-        <PreferenceSlider label="走りやすい道" value={props.preferences.road} onChange={(road) => props.onPreferencesChange({ ...props.preferences, road })} />
-        <PreferenceSlider label="景勝地" value={props.preferences.scenic} onChange={(scenic) => props.onPreferencesChange({ ...props.preferences, scenic })} />
-        <PreferenceSlider label="グルメ" value={props.preferences.gourmet} onChange={(gourmet) => props.onPreferencesChange({ ...props.preferences, gourmet })} />
-        <PreferenceSlider label="ゆったり" value={props.preferences.relaxed} onChange={(relaxed) => props.onPreferencesChange({ ...props.preferences, relaxed })} />
+        <PreferenceSegment label="走りやすい道" value={props.preferences.road} labels={["控えめ", "ほどよく", "重視"]} onChange={(road) => props.onPreferencesChange({ ...props.preferences, road })} />
+        <PreferenceSegment label="景勝地" value={props.preferences.scenic} labels={["少なめ", "ほどよく", "重視"]} onChange={(scenic) => props.onPreferencesChange({ ...props.preferences, scenic })} />
+        <PreferenceSegment label="グルメ" value={props.preferences.gourmet} labels={["軽め", "ほどよく", "重視"]} onChange={(gourmet) => props.onPreferencesChange({ ...props.preferences, gourmet })} />
+        <PreferenceSegment label="ゆったり" value={props.preferences.relaxed} labels={["詰める", "標準", "ゆったり"]} onChange={(relaxed) => props.onPreferencesChange({ ...props.preferences, relaxed })} />
         <div className="segmented">
           <button className={props.tripStyle === "half_day" ? "active" : ""} onClick={() => props.onTripStyleChange("half_day")}>
             半日
@@ -679,14 +728,24 @@ function InputPanel(props: {
   );
 }
 
-function PreferenceSlider(props: { label: string; value: number; onChange: (value: number) => void }) {
+function PreferenceSegment(props: {
+  label: string;
+  value: PreferenceLevel;
+  labels: [string, string, string];
+  onChange: (value: PreferenceLevel) => void;
+}) {
+  const values: PreferenceLevel[] = ["low", "medium", "high"];
   return (
-    <label className="range-label compact">
-      <span>
-        {props.label}: {props.value}
-      </span>
-      <input type="range" min={0} max={5} step={1} value={props.value} onChange={(event) => props.onChange(Number(event.target.value))} />
-    </label>
+    <div className="preference-control">
+      <span>{props.label}</span>
+      <div className="preference-segment" role="group" aria-label={props.label}>
+        {values.map((value, index) => (
+          <button key={value} className={props.value === value ? "active" : ""} onClick={() => props.onChange(value)} type="button">
+            {props.labels[index]}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -694,7 +753,7 @@ function PlanList(props: {
   response: PlanResponse | null;
   selectedIndex: number;
   onSelectPlan: (plan: Plan, index: number) => void;
-  onSelectSpot: (spot: PlanStop) => void;
+  onSelectSpot: (spot: PlanStop, plan: Plan, index: number) => void;
 }) {
   if (!props.response) {
     return (
@@ -727,6 +786,18 @@ function PlanList(props: {
             <div>
               <h2>{plan.title}</h2>
               <p>{plan.summary}</p>
+              <p className="plan-appeal">{plan.appeal}</p>
+              <p className="route-story">{plan.routeStory}</p>
+              <div className="best-for">
+                {plan.bestFor.slice(0, 3).map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
+              </div>
+              <div className="preference-fit">
+                {plan.preferenceFit.slice(0, 3).map((fit) => (
+                  <span key={fit}>{fit}</span>
+                ))}
+              </div>
               <span>
                 約{plan.estimatedDistanceKm}km / 約{Math.round(plan.estimatedDurationMin / 10) * 10}分 / {plan.highwayUsage} /{" "}
                 {plan.routeSource === "osrm" ? "道路ルート" : "簡易目安"}
@@ -735,7 +806,7 @@ function PlanList(props: {
           </button>
           <div className="stop-row">
             {plan.stops.map((stop) => (
-              <button key={stop.spotId} onClick={() => props.onSelectSpot(stop)}>
+              <button key={stop.spotId} onClick={() => props.onSelectSpot(stop, plan, index)}>
                 {categoryIcon(stop.category)}
                 {stop.name}
               </button>
@@ -747,8 +818,8 @@ function PlanList(props: {
   );
 }
 
-function SpotDetail({ spot }: { spot: PlanStop | null }) {
-  if (!spot) {
+function PlanItinerary(props: { plan: Plan | null; selectedSpot: PlanStop | null; onSelectSpot: (spot: PlanStop) => void }) {
+  if (!props.plan) {
     return (
       <div className="empty-state">
         <ImageOff size={34} />
@@ -756,20 +827,70 @@ function SpotDetail({ spot }: { spot: PlanStop | null }) {
       </div>
     );
   }
+  const activeSpot = props.selectedSpot ?? props.plan.stops[0] ?? null;
   return (
     <article className="spot-detail">
-      <SpotImage stop={spot} large />
+      {activeSpot && <SpotImage stop={activeSpot} large />}
       <div className="spot-copy">
-        <p className="category-label">{categoryLabel(spot.category)} / {spot.area}</p>
-        <h2>{spot.name}</h2>
-        <p>{spot.description}</p>
-        <p className="leg-note">{spot.legNote}</p>
-        {spot.images[0] ? (
-          <a href={spot.images[0].sourceUrl} target="_blank" rel="noreferrer">
-            {spot.images[0].credit} / {spot.images[0].license}
-          </a>
-        ) : (
-          <span className="credit">画像なし: カテゴリ別プレースホルダー</span>
+        <p className="category-label">旅程 / {props.plan.estimatedDistanceKm}km / 約{Math.round(props.plan.estimatedDurationMin / 10) * 10}分</p>
+        <h2>{props.plan.title}</h2>
+        <p>{props.plan.routeStory}</p>
+        <div className="best-for">
+          {props.plan.bestFor.slice(0, 3).map((item) => (
+            <span key={item}>{item}</span>
+          ))}
+        </div>
+        <div className="itinerary-list">
+          {props.plan.stops.map((spot, index) => (
+            <button
+              key={spot.spotId}
+              className={activeSpot?.spotId === spot.spotId ? "active" : ""}
+              onClick={() => props.onSelectSpot(spot)}
+              type="button"
+            >
+              <span>{index + 1}</span>
+              <div>
+                <strong>{spot.name}</strong>
+                <small>{categoryLabel(spot.category)} / {spot.area} / {spot.timeHint}</small>
+              </div>
+            </button>
+          ))}
+        </div>
+        {activeSpot && (
+          <>
+            <div className="itinerary-notes">
+              <section>
+                <strong>魅力</strong>
+                <p>{activeSpot.famousFor}</p>
+              </section>
+              <section>
+                <strong>ここに寄る理由</strong>
+                <p>{activeSpot.whyStopHere}</p>
+              </section>
+              <section>
+                <strong>ライダーメモ</strong>
+                <p>{activeSpot.riderNote}</p>
+              </section>
+              <section>
+                <strong>おすすめ</strong>
+                <p>{activeSpot.recommendedAction}</p>
+              </section>
+            </div>
+            <div className="preference-fit">
+              {activeSpot.matchedPreferences.map((preference) => (
+                <span key={preference}>{preferenceLabel(preference)}</span>
+              ))}
+              <span>滞在目安: {activeSpot.timeHint}</span>
+            </div>
+            <p className="leg-note">{activeSpot.legNote}</p>
+            {activeSpot.images[0] ? (
+              <a href={activeSpot.images[0].sourceUrl} target="_blank" rel="noreferrer">
+                {activeSpot.images[0].credit} / {activeSpot.images[0].license}
+              </a>
+            ) : (
+              <span className="credit">画像なし: カテゴリ別プレースホルダー</span>
+            )}
+          </>
         )}
       </div>
     </article>
@@ -779,6 +900,9 @@ function SpotDetail({ spot }: { spot: PlanStop | null }) {
 function SpotImage({ stop, large = false }: { stop?: Pick<PlanStop, "name" | "category" | "images">; large?: boolean }) {
   const [failed, setFailed] = useState(false);
   const image = stop?.images?.[0];
+  useEffect(() => {
+    setFailed(false);
+  }, [image?.url, stop?.name]);
   if (!image || failed) {
     return (
       <div className={`spot-image placeholder ${large ? "large" : ""} ${stop?.category ?? "road"}`}>
@@ -818,6 +942,19 @@ function codexStatusDetail(status: CodexStatus | null) {
 
 function sourceLabel(source: string) {
   return source === "gps" ? "GPS" : source === "manual" ? "手動" : "プリセット";
+}
+
+function preferenceLabel(preference: keyof PlanRequest["preferences"]) {
+  switch (preference) {
+    case "gourmet":
+      return "グルメに合う";
+    case "scenic":
+      return "景色に合う";
+    case "road":
+      return "走りに合う";
+    case "relaxed":
+      return "ゆったりに合う";
+  }
 }
 
 function categoryColor(category: string) {

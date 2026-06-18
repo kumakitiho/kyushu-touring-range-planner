@@ -9,6 +9,9 @@ export const highwayModes = [
 ] as const;
 
 export const generationModes = ["auto", "codex", "local"] as const;
+export const preferenceLevels = ["low", "medium", "high"] as const;
+
+const PreferenceSchema = z.enum(preferenceLevels);
 
 export const SpotImageSchema = z.object({
   url: z.string().min(1),
@@ -45,10 +48,10 @@ export const PlanRequestSchema = z.object({
     highwayMode: z.enum(highwayModes)
   }),
   preferences: z.object({
-    gourmet: z.number().min(0).max(5),
-    scenic: z.number().min(0).max(5),
-    road: z.number().min(0).max(5),
-    relaxed: z.number().min(0).max(5)
+    gourmet: PreferenceSchema,
+    scenic: PreferenceSchema,
+    road: PreferenceSchema,
+    relaxed: PreferenceSchema
   }),
   tripStyle: z.enum(["half_day", "day_trip"]),
   count: z.number().int().min(1).max(4),
@@ -64,12 +67,22 @@ export const PlanStopSchema = z.object({
   area: z.string(),
   description: z.string(),
   images: z.array(SpotImageSchema),
-  legNote: z.string()
+  legNote: z.string(),
+  whyStopHere: z.string(),
+  famousFor: z.string(),
+  riderNote: z.string(),
+  recommendedAction: z.string(),
+  timeHint: z.string(),
+  matchedPreferences: z.array(z.enum(["gourmet", "scenic", "road", "relaxed"]))
 });
 
 export const PlanSchema = z.object({
   title: z.string(),
   summary: z.string(),
+  appeal: z.string(),
+  bestFor: z.array(z.string()),
+  routeStory: z.string(),
+  preferenceFit: z.array(z.string()),
   stops: z.array(PlanStopSchema).min(1),
   estimatedDistanceKm: z.number(),
   estimatedDurationMin: z.number(),
@@ -103,6 +116,7 @@ export const PlanResponseSchema = z.object({
 
 export type HighwayMode = (typeof highwayModes)[number];
 export type GenerationMode = (typeof generationModes)[number];
+export type PreferenceLevel = (typeof preferenceLevels)[number];
 export type Spot = z.infer<typeof SpotSchema>;
 export type PlanRequest = z.infer<typeof PlanRequestSchema>;
 export type PlanResponse = z.infer<typeof PlanResponseSchema>;

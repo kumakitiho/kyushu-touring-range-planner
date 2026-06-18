@@ -32,6 +32,10 @@ export async function buildPlansWithMode(
           {
             title: draft.title,
             summary: draft.summary,
+            appeal: draft.appeal,
+            bestFor: draft.bestFor,
+            routeStory: draft.routeStory,
+            preferenceFit: draft.preferenceFit,
             highlights: draft.highlights,
             cautions: draft.cautions
           },

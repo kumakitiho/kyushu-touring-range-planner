@@ -46,6 +46,53 @@ button {
   z-index: 0;
 }
 
+.loading-overlay {
+  position: absolute;
+  left: 50%;
+  top: 92px;
+  z-index: 620;
+  width: min(330px, calc(100vw - 28px));
+  min-height: 94px;
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 4px 10px;
+  align-items: center;
+  transform: translateX(-50%);
+  padding: 14px;
+  border-radius: 8px;
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.24);
+}
+
+.loading-overlay strong,
+.loading-overlay span {
+  display: block;
+}
+
+.loading-overlay span {
+  grid-column: 2;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.loading-spinner {
+  grid-row: 1 / span 2;
+  width: 34px;
+  height: 34px;
+  border: 4px solid #fed7aa;
+  border-top-color: #ea580c;
+  border-radius: 999px;
+  animation: spin 760ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .top-bar {
   position: absolute;
   top: max(12px, env(safe-area-inset-top));
@@ -313,6 +360,35 @@ button {
   margin-top: 8px;
 }
 
+.preference-control {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.preference-segment {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.preference-segment button {
+  min-height: 44px;
+  border-radius: 8px;
+  color: #0f172a;
+  background: #e2e8f0;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.preference-segment button.active {
+  color: #fff;
+  background: #0f172a;
+}
+
 .segmented {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -464,6 +540,53 @@ button {
   line-height: 1.4;
 }
 
+.plan-main .plan-appeal {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.route-story {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.best-for {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 7px 0;
+}
+
+.best-for span {
+  max-width: 100%;
+  padding: 5px 8px;
+  border-radius: 8px;
+  color: #166534;
+  background: #dcfce7;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.preference-fit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 7px 0;
+}
+
+.preference-fit span {
+  max-width: 100%;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #075985;
+  background: #e0f2fe;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
 .spot-image {
   width: 100%;
   height: 92px;
@@ -536,6 +659,82 @@ button {
 .spot-copy a {
   color: #0369a1;
   font-size: 12px;
+}
+
+.itinerary-notes {
+  display: grid;
+  gap: 8px;
+}
+
+.itinerary-list {
+  display: grid;
+  gap: 7px;
+}
+
+.itinerary-list button {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 8px;
+  align-items: center;
+  border-radius: 8px;
+  padding: 8px;
+  color: #0f172a;
+  background: #f1f5f9;
+  text-align: left;
+}
+
+.itinerary-list button.active {
+  outline: 2px solid #f97316;
+  background: #fff7ed;
+}
+
+.itinerary-list button > span {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: #0f172a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.itinerary-list strong,
+.itinerary-list small {
+  display: block;
+}
+
+.itinerary-list small {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.itinerary-notes section {
+  padding: 9px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.itinerary-notes strong,
+.itinerary-notes p {
+  display: block;
+  margin: 0;
+}
+
+.itinerary-notes strong {
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.itinerary-notes p {
+  margin-top: 3px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .empty-state {

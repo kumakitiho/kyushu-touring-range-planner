@@ -25,7 +25,7 @@ describe("plans api", () => {
         origin: { label: "熊本駅", lat: 32.7907, lng: 130.6889, source: "preset" },
         constraint: { type: "duration", value: 240, unit: "min" },
         routeOptions: { highwayMode: "local_only_after_highway" },
-        preferences: { gourmet: 4, scenic: 4, road: 5, relaxed: 2 },
+        preferences: { gourmet: "medium", scenic: "medium", road: "high", relaxed: "low" },
         tripStyle: "day_trip",
         count: 3,
         generationMode: "local"
@@ -56,7 +56,7 @@ describe("plans api", () => {
         origin: { label: "熊本駅", lat: 32.7907, lng: 130.6889, source: "preset" },
         constraint: { type: "duration", value: 240, unit: "min" },
         routeOptions: { highwayMode: "none" },
-        preferences: { gourmet: 4, scenic: 4, road: 5, relaxed: 2 },
+        preferences: { gourmet: "medium", scenic: "medium", road: "high", relaxed: "low" },
         tripStyle: "day_trip",
         count: 3,
         generationMode: "local"
@@ -77,6 +77,10 @@ describe("plans api", () => {
         {
           title: "Codex選定プラン",
           summary: "候補スポットから選んだ提案です。",
+          appeal: "走り重視の条件に合わせたCodex提案です。",
+          bestFor: ["走りを楽しみたい人"],
+          routeStory: "同じ方面にまとまるように選びます。",
+          preferenceFit: ["走り重視: 候補スポットが条件に合います"],
           spotIds: [candidates[0].id],
           highlights: ["同じ候補IDだけを使う"],
           cautions: []
@@ -90,7 +94,7 @@ describe("plans api", () => {
         origin: { label: "熊本駅", lat: 32.7907, lng: 130.6889, source: "preset" },
         constraint: { type: "duration", value: 240, unit: "min" },
         routeOptions: { highwayMode: "none" },
-        preferences: { gourmet: 4, scenic: 4, road: 5, relaxed: 2 },
+        preferences: { gourmet: "medium", scenic: "medium", road: "high", relaxed: "low" },
         tripStyle: "day_trip",
         count: 3,
         generationMode: "auto"
@@ -115,7 +119,7 @@ describe("plans api", () => {
         origin: { label: "熊本駅", lat: 32.7907, lng: 130.6889, source: "preset" },
         constraint: { type: "duration", value: 240, unit: "min" },
         routeOptions: { highwayMode: "none" },
-        preferences: { gourmet: 4, scenic: 4, road: 5, relaxed: 2 },
+        preferences: { gourmet: "medium", scenic: "medium", road: "high", relaxed: "low" },
         tripStyle: "day_trip",
         count: 3,
         generationMode: "codex"
@@ -143,7 +147,7 @@ describe("plans api", () => {
         origin: { label: "熊本駅", lat: 32.7907, lng: 130.6889, source: "preset" },
         constraint: { type: "duration", value: 240, unit: "min" },
         routeOptions: { highwayMode: "none" },
-        preferences: { gourmet: 4, scenic: 4, road: 5, relaxed: 2 },
+        preferences: { gourmet: "medium", scenic: "medium", road: "high", relaxed: "low" },
         tripStyle: "day_trip",
         count: 3,
         generationMode: "auto"
@@ -165,8 +169,12 @@ describe("plans api", () => {
         {
           title: "不正候補プラン",
           summary: "候補外IDを混ぜた提案です。",
+          appeal: "候補外IDを混ぜる異常系です。",
+          bestFor: ["テスト"],
+          routeStory: "候補外IDの拒否を確認します。",
+          preferenceFit: ["走り重視: テスト"],
           spotIds: [candidates[0].id, "outside-candidate-id"],
-          highlights: [],
+          highlights: ["テスト"],
           cautions: []
         }
       ])
@@ -179,7 +187,7 @@ describe("plans api", () => {
           origin: { label: "熊本駅", lat: 32.7907, lng: 130.6889, source: "preset" },
           constraint: { type: "duration", value: 240, unit: "min" },
           routeOptions: { highwayMode: "none" },
-          preferences: { gourmet: 4, scenic: 4, road: 5, relaxed: 2 },
+          preferences: { gourmet: "medium", scenic: "medium", road: "high", relaxed: "low" },
           tripStyle: "day_trip",
           count: 3,
           generationMode: "codex"

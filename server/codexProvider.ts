@@ -26,11 +26,15 @@ export type CodexLoginStart = {
 };
 
 export type CodexPlanDraft = {
-  title?: string;
-  summary?: string;
+  title: string;
+  summary: string;
+  appeal: string;
+  bestFor: string[];
+  routeStory: string;
+  preferenceFit: string[];
   spotIds: string[];
-  highlights?: string[];
-  cautions?: string[];
+  highlights: string[];
+  cautions: string[];
 };
 
 export interface CodexPlanProvider {
@@ -42,11 +46,15 @@ export interface CodexPlanProvider {
 const CodexDraftResponseSchema = z.object({
   plans: z.array(
     z.object({
-      title: z.string().min(1).optional(),
-      summary: z.string().min(1).optional(),
+      title: z.string().min(1),
+      summary: z.string().min(1),
+      appeal: z.string().min(1),
+      bestFor: z.array(z.string()).min(1),
+      routeStory: z.string().min(1),
+      preferenceFit: z.array(z.string()).min(1),
       spotIds: z.array(z.string()).min(1).max(5),
-      highlights: z.array(z.string()).optional(),
-      cautions: z.array(z.string()).optional()
+      highlights: z.array(z.string()).min(1),
+      cautions: z.array(z.string())
     })
   )
 });
@@ -95,7 +103,9 @@ const PLAN_SELECTOR_INSTRUCTIONS = [
   "Do not inspect files. Do not run commands. Do not browse the web. Do not call tools. Do not modify anything.",
   "Return only JSON that matches the provided output schema.",
   "Use only candidate spot IDs. Never invent spot IDs or places.",
-  "Prefer one geographic direction from the origin, not east then west then backtracking."
+  "Prefer one geographic direction from the origin, not east then west then backtracking.",
+  "Treat request.preferences as three-level user intent: low means avoid unless useful, medium means balance, high means prioritize.",
+  "Explain why the selected plan fits the user's preferences and what is attractive about the route."
 ].join("\n");
 
 export function selectCodexCandidates(candidates: Spot[]): Spot[] {
@@ -183,7 +193,7 @@ export class AppServerCodexProvider implements CodexPlanProvider {
       {
         model,
         cwd: this.sandboxCwd,
-        approvalPolicy: "untrusted",
+        approvalPolicy: "never",
         sandbox: "read-only",
         personality: "none",
         baseInstructions: PLAN_SELECTOR_INSTRUCTIONS,
@@ -327,10 +337,10 @@ export class AppServerCodexProvider implements CodexPlanProvider {
         id,
         params: {
           threadId,
-          input: [{ type: "text", text: buildPrompt(request, candidates), text_elements: [] }],
+          input: [{ type: "text", text: buildPreferencePrompt(request, candidates), text_elements: [] }],
           cwd: this.sandboxCwd,
           model,
-          approvalPolicy: "untrusted",
+          approvalPolicy: "never",
           effort: "none",
           summary: "none",
           personality: "none",
@@ -338,7 +348,7 @@ export class AppServerCodexProvider implements CodexPlanProvider {
             type: "readOnly",
             access: { type: "restricted", includePlatformDefaults: true, readableRoots: [] }
           },
-          outputSchema: codexOutputSchema()
+          outputSchema: codexPreferenceOutputSchema()
         }
       });
     });
@@ -717,6 +727,81 @@ function codexOutputSchema() {
           properties: {
             title: { type: "string" },
             summary: { type: "string" },
+            spotIds: {
+              type: "array",
+              minItems: 1,
+              maxItems: 5,
+              items: { type: "string" }
+            },
+            highlights: { type: "array", items: { type: "string" } },
+            cautions: { type: "array", items: { type: "string" } }
+          }
+        }
+      }
+    }
+  };
+}
+
+function buildPreferencePrompt(request: PlanRequest, candidates: Spot[]): string {
+  const candidateSummaries = selectCodexCandidates(candidates).map((spot) => ({
+    id: spot.id,
+    name: spot.name,
+    category: spot.category,
+    area: spot.area,
+    lat: spot.lat,
+    lng: spot.lng,
+    tags: spot.tags,
+    description: spot.description
+  }));
+  return [
+    "あなたは九州在住のバイク乗りとして、日帰りツーリングの立ち寄りスポットを選びます。",
+    "必ず候補に含まれるspot idだけを使ってください。存在しないスポットは作らないでください。",
+    "出発地を中心に東へ行って戻って西へ行くような不自然な往復は避け、1つの方面にまとまるプランにしてください。",
+    "preferencesは3段階です。lowは控えめ、mediumはほどよく、highは重視として、highの条件をプラン選定と文章に明確に反映してください。",
+    "距離・時間・ルート形状はサーバー側で検証します。あなたはspotIds、タイトル、要約、魅力、好みとの相性、見どころ、注意点だけをJSONで返してください。",
+    JSON.stringify({
+      request,
+      candidates: candidateSummaries,
+      output: {
+        plans: [
+          {
+            title: "string",
+            summary: "string",
+            appeal: "string",
+            bestFor: ["string"],
+            routeStory: "string",
+            preferenceFit: ["string"],
+            spotIds: ["candidate-spot-id"],
+            highlights: ["string"],
+            cautions: ["string"]
+          }
+        ]
+      }
+    })
+  ].join("\n");
+}
+
+function codexPreferenceOutputSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["plans"],
+    properties: {
+      plans: {
+        type: "array",
+        minItems: 1,
+        maxItems: 4,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["title", "summary", "appeal", "bestFor", "routeStory", "preferenceFit", "spotIds", "highlights", "cautions"],
+          properties: {
+            title: { type: "string" },
+            summary: { type: "string" },
+            appeal: { type: "string" },
+            bestFor: { type: "array", items: { type: "string" } },
+            routeStory: { type: "string" },
+            preferenceFit: { type: "array", items: { type: "string" } },
             spotIds: {
               type: "array",
               minItems: 1,

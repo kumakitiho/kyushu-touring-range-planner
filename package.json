@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "start": "tsx server/index.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "spots:images": "node scripts/enrich-spot-images.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

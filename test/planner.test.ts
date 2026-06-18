@@ -9,7 +9,7 @@ const baseRequest = PlanRequestSchema.parse({
   origin: { label: "Kumamoto", lat: 32.7907, lng: 130.6889, source: "preset" },
   constraint: { type: "duration", value: 240, unit: "min" },
   routeOptions: { highwayMode: "none" },
-  preferences: { gourmet: 4, scenic: 4, road: 5, relaxed: 2 },
+  preferences: { gourmet: "medium", scenic: "medium", road: "high", relaxed: "low" },
   tripStyle: "day_trip",
   count: 3
 });
@@ -30,6 +30,8 @@ describe("planner fallback", () => {
     expect(response.mode).toBe("local");
     expect(response.plans[0].routeSource).toBe("fallback");
     expect(response.plans[0].source).toBe("local");
+    expect(response.plans[0].preferenceFit.length).toBeGreaterThan(0);
+    expect(response.plans[0].stops[0].whyStopHere).toContain("好み");
     expect(response.plans.length).toBeGreaterThan(0);
     expect(response.plans[0].routeLine[0]).toEqual([baseRequest.origin.lat, baseRequest.origin.lng]);
   });

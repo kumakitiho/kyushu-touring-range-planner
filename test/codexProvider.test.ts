@@ -106,7 +106,7 @@ describe("codex provider event buffering", () => {
     try {
       const result = provider.startTurn("thread-1", baseRequest, [baseSpot, spotWithId("spot-2"), spotWithId("spot-3")], "gpt-5.4-mini");
       const turnStart = sent.find((message) => message.method === "turn/start");
-      expect(turnStart?.params?.approvalPolicy).toBe("untrusted");
+      expect(turnStart?.params?.approvalPolicy).toBe("never");
       expect(turnStart?.params?.effort).toBe("none");
       expect(turnStart?.params?.summary).toBe("none");
       expect(turnStart?.params?.personality).toBe("none");
@@ -119,6 +119,20 @@ describe("codex provider event buffering", () => {
       expect(prompt).toContain("spot-1");
       expect(prompt).toContain("spot-2");
       expect(prompt).not.toContain("spot-3");
+      expect(prompt).toContain("\"road\":\"high\"");
+      expect(prompt).toContain("preferencesは3段階");
+      expect(turnStart?.params?.outputSchema).toMatchObject({
+        properties: {
+          plans: {
+            items: {
+              properties: {
+                preferenceFit: { type: "array" },
+                routeStory: { type: "string" }
+              }
+            }
+          }
+        }
+      });
       provider.handleLine(JSON.stringify({ id: turnStart?.id, error: { message: "stop test turn" } }));
       await expect(result).rejects.toThrow("stop test turn");
     } finally {
@@ -188,7 +202,7 @@ const baseRequest: PlanRequest = {
   origin: { label: "福岡・天神", lat: 33.5902, lng: 130.4017, source: "preset" },
   constraint: { type: "duration", value: 180, unit: "min" },
   routeOptions: { highwayMode: "none" },
-  preferences: { gourmet: 4, scenic: 4, road: 4, relaxed: 2 },
+  preferences: { gourmet: "medium", scenic: "medium", road: "high", relaxed: "low" },
   tripStyle: "day_trip",
   count: 1,
   generationMode: "codex"

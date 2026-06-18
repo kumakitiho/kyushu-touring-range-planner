@@ -147,7 +147,15 @@
       "rest"
     ],
     "description": "補給・休憩・トイレの中継点。長距離プランの安全弁に使う。",
-    "images": []
+    "images": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/Roadside_station_Osumi_Yagorou_densetsu_no_saoto_%2C_%E9%81%93%E3%81%AE%E9%A7%85_%E3%81%8A%E3%81%8A%E3%81%99%E3%81%BF%E5%BC%A5%E4%BA%94%E9%83%8E%E4%BC%9D%E8%AA%AC%E3%81%AE%E9%87%8C_-_panoramio.jpg/960px-Roadside_station_Osumi_Yagorou_densetsu_no_saoto_%2C_%E9%81%93%E3%81%AE%E9%A7%85_%E3%81%8A%E3%81%8A%E3%81%99%E3%81%BF%E5%BC%A5%E4%BA%94%E9%83%8E%E4%BC%9D%E8%AA%AC%E3%81%AE%E9%87%8C_-_panoramio.jpg",
+        "alt": "道の駅おおすみ弥五郎伝説の里の画像",
+        "credit": "z tanuki",
+        "license": "CC BY 3.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File%3ARoadside_station_Osumi_Yagorou_densetsu_no_saoto_%2C_%E9%81%93%E3%81%AE%E9%A7%85_%E3%81%8A%E3%81%8A%E3%81%99%E3%81%BF%E5%BC%A5%E4%BA%94%E9%83%8E%E4%BC%9D%E8%AA%AC%E3%81%AE%E9%87%8C_-_panoramio.jpg"
+      }
+    ]
   },
   {
     "id": "roadside_station-q11640724",
@@ -162,7 +170,15 @@
       "rest"
     ],
     "description": "補給・休憩・トイレの中継点。長距離プランの安全弁に使う。",
-    "images": []
+    "images": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/%E9%81%93%E3%81%AE%E9%A7%85%E3%81%8D%E3%82%93%E3%81%BD%E3%81%86%E6%9C%A8%E8%8A%B1%E9%A4%A8.jpg/960px-%E9%81%93%E3%81%AE%E9%A7%85%E3%81%8D%E3%82%93%E3%81%BD%E3%81%86%E6%9C%A8%E8%8A%B1%E9%A4%A8.jpg",
+        "alt": "道の駅きんぽう木花館の画像",
+        "credit": "On-neko",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File%3A%E9%81%93%E3%81%AE%E9%A7%85%E3%81%8D%E3%82%93%E3%81%BD%E3%81%86%E6%9C%A8%E8%8A%B1%E9%A4%A8.jpg"
+      }
+    ]
   },
   {
     "id": "roadside_station-q11640729",
@@ -1152,7 +1168,15 @@
       "rest"
     ],
     "description": "補給・休憩・トイレの中継点。長距離プランの安全弁に使う。",
-    "images": []
+    "images": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/%E9%81%93%E3%81%AE%E9%A7%85%E3%81%8A%E3%81%8A%E3%81%8D%E3%80%8C%E3%81%8F%E3%82%8B%E3%82%8B%E3%82%93%E5%A4%A2%E5%B8%82%E5%A0%B4%E3%80%8D_-_panoramio.jpg/960px-%E9%81%93%E3%81%AE%E9%A7%85%E3%81%8A%E3%81%8A%E3%81%8D%E3%80%8C%E3%81%8F%E3%82%8B%E3%82%8B%E3%82%93%E5%A4%A2%E5%B8%82%E5%A0%B4%E3%80%8D_-_panoramio.jpg",
+        "alt": "道の駅おおきの画像",
+        "credit": "UltraH",
+        "license": "CC BY-SA 3.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File%3A%E9%81%93%E3%81%AE%E9%A7%85%E3%81%8A%E3%81%8A%E3%81%8D%E3%80%8C%E3%81%8F%E3%82%8B%E3%82%8B%E3%82%93%E5%A4%A2%E5%B8%82%E5%A0%B4%E3%80%8D_-_panoramio.jpg"
+      }
+    ]
   },
   {
     "id": "roadside_station-q11640678",
