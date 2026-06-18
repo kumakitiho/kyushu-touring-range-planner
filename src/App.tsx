@@ -209,11 +209,47 @@ export function App() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedSpot) return;
-    map.flyTo([selectedSpot.lat, selectedSpot.lng], Math.max(map.getZoom(), 10), {
+    flyToSpotInVisibleMapArea(map, [selectedSpot.lat, selectedSpot.lng], sheetMode);
+  }, [selectedSpot, sheetMode]);
+
+  function selectItinerarySpot(spot: PlanStop) {
+    setSelectedSpot(spot);
+    if (sheetMode === "full") setSheetMode("mid");
+  }
+
+  function flyToSpotInVisibleMapArea(map: LeafletMap, spot: LatLngExpression, mode: SheetMode) {
+    const zoom = Math.max(map.getZoom(), 10);
+    const mapRect = map.getContainer().getBoundingClientRect();
+    const sheetRect = document.querySelector(".bottom-sheet")?.getBoundingClientRect();
+    const isBottomSheet =
+      sheetRect &&
+      sheetRect.width > mapRect.width * 0.8 &&
+      sheetRect.top < mapRect.bottom &&
+      sheetRect.bottom > mapRect.top;
+
+    if (!isBottomSheet) {
+      map.flyTo(spot, zoom, {
+        animate: true,
+        duration: 0.75
+      });
+      return;
+    }
+
+    const sheetHeight = Math.max(0, mapRect.bottom - sheetRect.top);
+    const topPadding = 84;
+    const effectiveSheetHeight = mode === "full" ? mapRect.height * 0.46 : sheetHeight;
+    const bottomPadding = mode === "peek" ? Math.min(effectiveSheetHeight, mapRect.height * 0.28) : effectiveSheetHeight;
+    const visibleBottom = Math.max(topPadding + 120, mapRect.height - bottomPadding);
+    const targetY = (topPadding + visibleBottom) / 2;
+    const spotPoint = map.project(spot, zoom);
+    const adjustedCenterPoint = L.point(spotPoint.x, spotPoint.y + mapRect.height / 2 - targetY);
+    const adjustedCenter = map.unproject(adjustedCenterPoint, zoom);
+
+    map.flyTo(adjustedCenter, zoom, {
       animate: true,
       duration: 0.75
     });
-  }, [selectedSpot]);
+  }
 
   useEffect(() => {
     const routeLayer = routeLayerRef.current;
@@ -527,7 +563,7 @@ export function App() {
               }}
             />
           )}
-          {activeTab === "spot" && <PlanItinerary plan={selectedPlan} selectedSpot={selectedSpot} onSelectSpot={setSelectedSpot} />}
+          {activeTab === "spot" && <PlanItinerary plan={selectedPlan} selectedSpot={selectedSpot} onSelectSpot={selectItinerarySpot} />}
         </div>
       </section>
     </main>
