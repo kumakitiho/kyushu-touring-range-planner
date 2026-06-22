@@ -3,22 +3,22 @@ import {
   Bike,
   Bot,
   ChevronDown,
+  Clock,
   Crosshair,
   ImageOff,
   LocateFixed,
   MapPin,
-  Pause,
-  Play,
-  RotateCcw,
   Route,
   Search,
   Utensils
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { circlePolygon } from "./lib/geo";
+import { requestPlans } from "./lib/planClient";
 import { routeAtProgress, routeHead } from "./lib/routeAnimation";
-import type { GenerationMode, HighwayMode, Plan, PlanRequest, PlanResponse, PlanStop, PreferenceLevel } from "./shared/types";
+import type { GenerationMode, HighwayMode, Plan, PlanRequest, PlanResponse, PlanStop, PreferenceLevel, Spot } from "./shared/types";
 
-type Tab = "input" | "plans" | "spot";
+type SheetView = "setup" | "plans" | "detail";
 type GeoState = "idle" | "requesting" | "granted" | "denied" | "unavailable" | "timeout" | "low_accuracy";
 type SheetMode = "peek" | "mid" | "full";
 type CodexStatus = {
@@ -52,36 +52,33 @@ const defaultOrigin: Origin = { ...presets[0], source: "preset" };
 const defaultPreferences: PlanRequest["preferences"] = {
   gourmet: "medium",
   scenic: "medium",
-  road: "high",
+  road: "medium",
   relaxed: "low"
 };
 
 const highwayOptions: Array<{ value: HighwayMode; label: string; hint: string }> = [
-  { value: "none", label: "下道のみ", hint: "近場と快走路を優先" },
-  { value: "full", label: "高速あり", hint: "遠方候補も出す" },
-  { value: "outbound_only", label: "行きだけ高速", hint: "帰りはゆっくり" },
-  { value: "return_only", label: "帰りだけ高速", hint: "帰宅を楽に" },
-  { value: "local_only_after_highway", label: "現地は下道", hint: "ワープして走る" }
+  { value: "none", label: "下道のみ", hint: "近場を中心に組む" },
+  { value: "full", label: "高速あり", hint: "遠方候補も含める" }
 ];
 
 const generationOptions: Array<{ value: GenerationMode; label: string; hint: string }> = [
-  { value: "auto", label: "自動", hint: "Codex優先、失敗時ローカル" },
-  { value: "codex", label: "Codex", hint: "ChatGPT枠で候補選定" },
-  { value: "local", label: "ローカル", hint: "収集済みJSONのみ" }
+  { value: "auto", label: "おすすめ", hint: "条件を見て精度重視で提案" },
+  { value: "codex", label: "高精度提案", hint: "条件の読み取りを強める" },
+  { value: "local", label: "登録データ", hint: "収集済みスポットだけで提案" }
 ];
 
 const loadingMessages = [
-  "条件に合う候補スポットを絞り込んでいます",
-  "同じ方面にまとまる立ち寄り順を見ています",
-  "道路ルートと所要時間を確認しています",
-  "好みに合う理由と旅程メモを整えています"
+  "景色と食事のバランスを見ています",
+  "同じ方面で回りやすい順番を整えています",
+  "往復走行の目安を確認しています",
+  "今日の寄り道候補を絞っています"
 ];
 
 export function App() {
   const [origin, setOrigin] = useState(defaultOrigin);
   const [constraintType, setConstraintType] = useState<"distance" | "duration">("duration");
   const [constraintValue, setConstraintValue] = useState(240);
-  const [highwayMode, setHighwayMode] = useState<HighwayMode>("local_only_after_highway");
+  const [highwayMode, setHighwayMode] = useState<HighwayMode>("none");
   const [preferences, setPreferences] = useState<PlanRequest["preferences"]>(defaultPreferences);
   const [tripStyle, setTripStyle] = useState<"half_day" | "day_trip">("day_trip");
   const [generationMode, setGenerationMode] = useState<GenerationMode>("auto");
@@ -91,13 +88,12 @@ export function App() {
   const [planResponse, setPlanResponse] = useState<PlanResponse | null>(null);
   const [selectedPlanIndex, setSelectedPlanIndex] = useState(0);
   const [selectedSpot, setSelectedSpot] = useState<PlanStop | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("input");
+  const [sheetView, setSheetView] = useState<SheetView>("setup");
   const [sheetMode, setSheetMode] = useState<SheetMode>("mid");
   const [geoState, setGeoState] = useState<GeoState>("idle");
   const [message, setMessage] = useState("地図をタップすると手動で出発地点を置けます。");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
-  const [routeProgress, setRouteProgress] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const mapElement = useRef<HTMLDivElement | null>(null);
@@ -106,6 +102,7 @@ export function App() {
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const activeLineRef = useRef<Polyline | null>(null);
   const headMarkerRef = useRef<CircleMarker | null>(null);
+  const spotMarkerRefs = useRef<Map<string, CircleMarker>>(new Map());
   const animationRef = useRef<number | null>(null);
   const startedAtRef = useRef<number>(0);
   const routeProgressRef = useRef(1);
@@ -162,6 +159,7 @@ export function App() {
     const layers = layersRef.current;
     if (!map || !layers) return;
     layers.clearLayers();
+    spotMarkerRefs.current.clear();
 
     const originIcon = L.divIcon({
       className: "origin-marker",
@@ -171,7 +169,18 @@ export function App() {
     });
     L.marker([origin.lat, origin.lng], { icon: originIcon }).addTo(layers);
 
-    if (planResponse?.reachableArea.coordinates.length) {
+    if (!planResponse) {
+      const previewCoordinates = circlePolygon([origin.lat, origin.lng], previewRadiusKm(constraintType, constraintValue, highwayMode, tripStyle, preferences.relaxed));
+      L.polygon(previewCoordinates as LatLngExpression[], {
+        color: "#2563eb",
+        weight: 1,
+        opacity: 0.52,
+        dashArray: "6 8",
+        fillColor: "#60a5fa",
+        fillOpacity: 0.09,
+        interactive: false
+      }).addTo(layers);
+    } else if (planResponse.reachableArea.coordinates.length) {
       L.polygon(planResponse.reachableArea.coordinates as LatLngExpression[], {
         color: "#0284c7",
         weight: 1,
@@ -184,7 +193,7 @@ export function App() {
     planResponse?.candidates.forEach((spot) => {
       const isPlanStop = selectedPlan?.stops.some((stop) => stop.spotId === spot.id) ?? false;
       const isActive = activeSpotId === spot.id;
-      L.circleMarker([spot.lat, spot.lng], {
+      const marker = L.circleMarker([spot.lat, spot.lng], {
         radius: isActive ? 13 : isPlanStop ? 8 : 5,
         color: categoryColor(spot.category),
         fillColor: categoryColor(spot.category),
@@ -192,24 +201,32 @@ export function App() {
         weight: isActive ? 5 : 2,
         opacity: isActive ? 1 : 0.9
       })
-        .bindPopup(`<strong>${spot.name}</strong><br>${spot.area}<br>${spot.description}`)
+        .bindPopup(spotPopupHtml(spot))
+        .on("click", () => {
+          const planStop = selectedPlan?.stops.find((stop) => stop.spotId === spot.id);
+          if (planStop) setSelectedSpot(planStop);
+        })
         .addTo(layers);
+      spotMarkerRefs.current.set(spot.id, marker);
     });
+
+    if (activeSpotId) spotMarkerRefs.current.get(activeSpotId)?.openPopup();
 
     if (selectedPlan?.routeLine.length && fittedPlanKeyRef.current !== planKey(selectedPlan)) {
       map.fitBounds(L.latLngBounds(selectedPlan.routeLine as LatLngExpression[]), {
         paddingTopLeft: [32, 72],
-        paddingBottomRight: [32, sheetMode === "full" ? 420 : 260],
+        paddingBottomRight: [32, sheetMode === "full" ? 500 : 330],
         maxZoom: 10
       });
       fittedPlanKeyRef.current = planKey(selectedPlan);
     }
-  }, [origin, planResponse, selectedPlan, sheetMode, activeSpotId]);
+  }, [origin, planResponse, selectedPlan, sheetMode, activeSpotId, constraintType, constraintValue, highwayMode, tripStyle, preferences.relaxed]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedSpot) return;
     flyToSpotInVisibleMapArea(map, [selectedSpot.lat, selectedSpot.lng], sheetMode);
+    spotMarkerRefs.current.get(selectedSpot.spotId)?.openPopup();
   }, [selectedSpot, sheetMode]);
 
   function selectItinerarySpot(spot: PlanStop) {
@@ -268,7 +285,7 @@ export function App() {
     }).addTo(routeLayer);
 
     activeLineRef.current = L.polyline([], {
-      color: "#f97316",
+      color: "#2563eb",
       weight: 7,
       opacity: 0.92,
       lineCap: "round",
@@ -279,14 +296,14 @@ export function App() {
 
     headMarkerRef.current = L.circleMarker(selectedPlan.routeLine[0], {
       radius: 8,
-      color: "#fff7ed",
-      fillColor: "#ea580c",
+      color: "#eff6ff",
+      fillColor: "#2563eb",
       fillOpacity: 1,
       weight: 4,
       interactive: false
     }).addTo(routeLayer);
 
-    drawRouteFrame(routeProgress);
+    drawRouteFrame(routeProgressRef.current);
   }, [selectedPlan]);
 
   useEffect(() => {
@@ -299,7 +316,6 @@ export function App() {
       if (next < 1) {
         animationRef.current = requestAnimationFrame(tick);
       } else {
-        setRouteProgress(1);
         setIsPlaying(false);
       }
     };
@@ -308,10 +324,6 @@ export function App() {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, [isPlaying, selectedPlan]);
-
-  useEffect(() => {
-    if (!isPlaying) drawRouteFrame(routeProgress);
-  }, [routeProgress, isPlaying, selectedPlan]);
 
   async function generatePlans() {
     setIsLoading(true);
@@ -331,26 +343,19 @@ export function App() {
     };
 
     try {
-      const response = await fetch("/api/plans", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request)
-      });
-      if (!response.ok) throw new Error("プラン生成に失敗しました。");
-      const data = (await response.json()) as PlanResponse;
+      const data = await requestPlans(request);
       setPlanResponse(data);
       setSelectedPlanIndex(0);
       setSelectedSpot(data.plans[0]?.stops[0] ?? null);
       fittedPlanKeyRef.current = "";
       routeProgressRef.current = 0;
-      setActiveTab("plans");
+      setSheetView("plans");
       setSheetMode("mid");
-      setRouteProgress(0);
       setIsPlaying(true);
       setCodexStatus(data.providerStatus ? { ...data.providerStatus } : codexStatus);
       setMessage(messageForPlanResponse(data));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "プラン生成に失敗しました。");
+      setMessage(error instanceof Error ? error.message : "ルート提案に失敗しました。");
     } finally {
       setIsLoading(false);
     }
@@ -363,7 +368,7 @@ export function App() {
       setCodexStatus(data);
       if (showMessage) setMessage(statusMessage(data));
     } catch {
-      const unavailable = { codexAvailable: false, authMode: null, planType: null, message: "Codex状態を確認できませんでした。" };
+      const unavailable = { codexAvailable: false, authMode: null, planType: null, message: "高精度提案の状態を確認できませんでした。" };
       setCodexStatus(unavailable);
       if (showMessage) setMessage(unavailable.message);
     }
@@ -371,18 +376,18 @@ export function App() {
 
   async function startCodexLogin() {
     setIsCodexLoginLoading(true);
-    setMessage("Codexログインを開始しています。");
+    setMessage("高精度提案のログインを開始しています。");
     try {
       const response = await fetch("/api/codex/login/start", { method: "POST" });
       const data = (await response.json()) as CodexLoginStart;
       setCodexLogin(data);
       if (data.type === "unavailable") {
-        setMessage(data.message || "Codexログインを開始できませんでした。");
+        setMessage(data.message || "高精度提案のログインを開始できませんでした。");
       } else {
         setMessage("表示された手順でChatGPTログインを完了してください。");
       }
     } catch {
-      setMessage("Codexログインを開始できませんでした。");
+      setMessage("高精度提案のログインを開始できませんでした。");
     } finally {
       setIsCodexLoginLoading(false);
     }
@@ -417,28 +422,11 @@ export function App() {
     );
   }
 
-  function replayRoute() {
-    routeProgressRef.current = 0;
-    setRouteProgress(0);
-    drawRouteFrame(0);
-    setIsPlaying(true);
-  }
-
   function selectPlan(plan: Plan, index: number) {
     setSelectedPlanIndex(index);
     setSelectedSpot(plan.stops[0] ?? null);
     fittedPlanKeyRef.current = "";
     routeProgressRef.current = 0;
-    setRouteProgress(0);
-    setIsPlaying(true);
-  }
-
-  function toggleRoutePlayback() {
-    if (isPlaying) {
-      setRouteProgress(routeProgressRef.current);
-      setIsPlaying(false);
-      return;
-    }
     setIsPlaying(true);
   }
 
@@ -469,6 +457,15 @@ export function App() {
     window.addEventListener("pointerup", onEnd);
   }
 
+  const shouldShowStatus =
+    isLoading ||
+    geoState !== "idle" ||
+    message.includes("失敗") ||
+    message.includes("できません") ||
+    message.includes("ログイン") ||
+    message.includes("地図上") ||
+    message.includes("登録スポット");
+
   return (
     <main className="app-shell">
       <section className="map-stage" aria-label="ツーリングマップ">
@@ -476,31 +473,13 @@ export function App() {
         {isLoading && (
           <div className="loading-overlay" role="status" aria-live="polite">
             <div className="loading-spinner" />
-            <strong>プラン生成中</strong>
+            <strong>ルート提案中</strong>
             <span>{loadingMessages[loadingStep]}</span>
           </div>
         )}
         <div className="top-bar">
-          <div>
-            <p className="eyebrow">Kyushu Touring</p>
-            <h1>九州ツーリングレンジプランナー</h1>
-          </div>
           <button className="icon-button" onClick={useCurrentLocation} aria-label="現在地を使う">
             <LocateFixed size={21} />
-          </button>
-        </div>
-        <div className="route-controls" aria-label="ルート再生操作">
-          <button className="control-button" onClick={toggleRoutePlayback} disabled={!selectedPlan}>
-            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-            <span>{isPlaying ? "停止" : "再生"}</span>
-          </button>
-          <button className="control-button" onClick={replayRoute} disabled={!selectedPlan}>
-            <RotateCcw size={20} />
-            <span>リプレイ</span>
-          </button>
-          <button className="control-button primary" onClick={generatePlans} disabled={isLoading}>
-            <Search size={20} />
-            <span>{isLoading ? "生成中" : "プラン生成"}</span>
           </button>
         </div>
       </section>
@@ -510,21 +489,35 @@ export function App() {
           <span />
           <ChevronDown size={18} />
         </button>
-        <div className="status-line">{message}</div>
-        <nav className="tabs" aria-label="表示切替">
-          <button className={activeTab === "input" ? "active" : ""} onClick={() => setActiveTab("input")}>
-            条件
-          </button>
-          <button className={activeTab === "plans" ? "active" : ""} onClick={() => setActiveTab("plans")}>
-            提案
-          </button>
-          <button className={activeTab === "spot" ? "active" : ""} onClick={() => setActiveTab("spot")}>
-            旅程
-          </button>
-        </nav>
+        <div className="journey-bar">
+          <div>
+            <span className="journey-kicker">{sheetView === "setup" ? "今日の条件" : sheetView === "plans" ? "候補から選ぶ" : "ルートの流れ"}</span>
+            <strong>{selectedPlan ? selectedPlan.title : `${origin.label}から`}</strong>
+            <small>
+              {formatConstraint(constraintType, constraintValue)} / {highwayLabel(highwayMode)}
+            </small>
+          </div>
+          <div className="journey-actions">
+            {sheetView !== "setup" && (
+              <button onClick={() => setSheetView("setup")} type="button">
+                条件
+              </button>
+            )}
+            {planResponse && sheetView !== "plans" && (
+              <button onClick={() => setSheetView("plans")} type="button">
+                候補
+              </button>
+            )}
+          </div>
+        </div>
+        {shouldShowStatus && (
+          <div className="status-line" role="status" aria-live="polite">
+            {message}
+          </div>
+        )}
 
         <div className="sheet-content">
-          {activeTab === "input" && (
+          {sheetView === "setup" && (
             <InputPanel
               origin={origin}
               geoState={geoState}
@@ -537,6 +530,10 @@ export function App() {
               codexStatus={codexStatus}
               codexLogin={codexLogin}
               onUseCurrentLocation={useCurrentLocation}
+              onPickOriginOnMap={() => {
+                setSheetMode("peek");
+                setMessage("地図上の出発地点をタップしてください。");
+              }}
               onOriginChange={setOrigin}
               onConstraintTypeChange={setConstraintType}
               onConstraintValueChange={setConstraintValue}
@@ -546,12 +543,10 @@ export function App() {
               onGenerationModeChange={setGenerationMode}
               onStartCodexLogin={startCodexLogin}
               onRefreshCodexStatus={() => refreshCodexStatus(true)}
-              onGenerate={generatePlans}
-              isLoading={isLoading}
               isCodexLoginLoading={isCodexLoginLoading}
             />
           )}
-          {activeTab === "plans" && (
+          {sheetView === "plans" && (
             <PlanList
               response={planResponse}
               selectedIndex={selectedPlanIndex}
@@ -559,12 +554,16 @@ export function App() {
               onSelectSpot={(spot, plan, index) => {
                 selectPlan(plan, index);
                 setSelectedSpot(spot);
-                setActiveTab("spot");
+                setSheetView("detail");
               }}
             />
           )}
-          {activeTab === "spot" && <PlanItinerary plan={selectedPlan} selectedSpot={selectedSpot} onSelectSpot={selectItinerarySpot} />}
+          {sheetView === "detail" && <PlanItinerary plan={selectedPlan} selectedSpot={selectedSpot} onSelectSpot={selectItinerarySpot} />}
         </div>
+        <button className="generate-button sheet-primary" onClick={generatePlans} disabled={isLoading}>
+          <Search size={21} />
+          {isLoading ? "提案中" : "ルートを提案"}
+        </button>
       </section>
     </main>
   );
@@ -582,6 +581,7 @@ function InputPanel(props: {
   codexStatus: CodexStatus | null;
   codexLogin: CodexLoginStart | null;
   onUseCurrentLocation: () => void;
+  onPickOriginOnMap: () => void;
   onOriginChange: (origin: Origin) => void;
   onConstraintTypeChange: (type: "distance" | "duration") => void;
   onConstraintValueChange: (value: number) => void;
@@ -591,79 +591,64 @@ function InputPanel(props: {
   onGenerationModeChange: (mode: GenerationMode) => void;
   onStartCodexLogin: () => void;
   onRefreshCodexStatus: () => void;
-  onGenerate: () => void;
-  isLoading: boolean;
   isCodexLoginLoading: boolean;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   return (
-    <div className="panel-stack">
-      <section className="form-section">
-        <div className="section-title">
-          <Crosshair size={18} />
-          <h2>出発地点</h2>
-        </div>
-        <button className="wide-button" onClick={props.onUseCurrentLocation}>
-          <LocateFixed size={20} />
-          {props.geoState === "requesting" ? "現在地を取得中" : "GPS現在地を使う"}
-        </button>
-        <div className="origin-card">
-          <MapPin size={18} />
+    <div className="trip-setup">
+      <section className="trip-condition-card">
+        <div className="origin-strip">
+          <div className="origin-dot">
+            <MapPin size={18} />
+          </div>
           <div>
+            <span>出発</span>
             <strong>{props.origin.label}</strong>
-            <span>
-              {props.origin.lat.toFixed(4)}, {props.origin.lng.toFixed(4)} / {sourceLabel(props.origin.source)}
-            </span>
+          </div>
+          <div className="origin-actions">
+            <button className="locate-chip" onClick={props.onUseCurrentLocation} type="button">
+              <LocateFixed size={17} />
+              {props.geoState === "requesting" ? "取得中" : "現在地"}
+            </button>
+            <button className="locate-chip map-pick-chip" onClick={props.onPickOriginOnMap} type="button">
+              <Crosshair size={17} />
+              地図
+            </button>
           </div>
         </div>
-        <div className="preset-grid">
-          {presets.map((preset) => (
-            <button key={preset.label} onClick={() => props.onOriginChange({ ...preset, source: "preset" })}>
-              {preset.label}
-            </button>
-          ))}
-        </div>
-        <label className="coordinate-input">
-          緯度
-          <input
-            type="number"
-            step="0.000001"
-            value={props.origin.lat}
-            onChange={(event) =>
-              props.onOriginChange({ ...props.origin, lat: Number(event.target.value), source: "manual", label: "緯度経度で指定" })
-            }
-          />
-        </label>
-        <label className="coordinate-input">
-          経度
-          <input
-            type="number"
-            step="0.000001"
-            value={props.origin.lng}
-            onChange={(event) =>
-              props.onOriginChange({ ...props.origin, lng: Number(event.target.value), source: "manual", label: "緯度経度で指定" })
-            }
-          />
-        </label>
-      </section>
 
-      <section className="form-section">
-        <div className="section-title">
-          <Route size={18} />
-          <h2>走れる範囲</h2>
+        <div className="range-hero">
+          <div>
+            <span>{props.constraintType === "duration" ? "往復走行の目安" : "往復距離の目安"}</span>
+            <strong>{formatRangeValue(props.constraintType, props.constraintValue)}</strong>
+            {props.constraintType === "duration" && <small>{props.constraintValue}分</small>}
+          </div>
+          <div className="range-switch icon-toggle" role="group" aria-label="走行条件の指定方法">
+            <button
+              aria-label="走行時間で指定"
+              aria-pressed={props.constraintType === "duration"}
+              className={props.constraintType === "duration" ? "active" : ""}
+              onClick={() => props.onConstraintTypeChange("duration")}
+              type="button"
+              title="走行時間で指定"
+            >
+              <Clock size={19} />
+            </button>
+            <button
+              aria-label="走行距離で指定"
+              aria-pressed={props.constraintType === "distance"}
+              className={props.constraintType === "distance" ? "active" : ""}
+              onClick={() => props.onConstraintTypeChange("distance")}
+              type="button"
+              title="走行距離で指定"
+            >
+              <Bike size={19} />
+            </button>
+          </div>
         </div>
-        <div className="segmented">
-          <button className={props.constraintType === "duration" ? "active" : ""} onClick={() => props.onConstraintTypeChange("duration")}>
-            時間
-          </button>
-          <button className={props.constraintType === "distance" ? "active" : ""} onClick={() => props.onConstraintTypeChange("distance")}>
-            距離
-          </button>
-        </div>
-        <label className="range-label">
-          <span>
-            {props.constraintType === "duration" ? "走行時間" : "走行距離"}: {props.constraintValue}
-            {props.constraintType === "duration" ? "分" : "km"}
-          </span>
+
+        <label className="range-label compact">
           <input
             type="range"
             min={props.constraintType === "duration" ? 90 : 60}
@@ -673,93 +658,131 @@ function InputPanel(props: {
             onChange={(event) => props.onConstraintValueChange(Number(event.target.value))}
           />
         </label>
-        <div className="segmented highway-grid">
-          {highwayOptions.map((option) => (
-            <button
-              key={option.value}
-              className={props.highwayMode === option.value ? "active" : ""}
-              onClick={() => props.onHighwayModeChange(option.value)}
-            >
-              <strong>{option.label}</strong>
-              <span>{option.hint}</span>
-            </button>
-          ))}
+
+        <div className="quick-prefs">
+          <span>景色: {preferenceLevelLabel(props.preferences.scenic)}</span>
+          <span>食事: {preferenceLevelLabel(props.preferences.gourmet)}</span>
         </div>
+
       </section>
 
-      <section className="form-section">
-        <div className="section-title">
-          <Bot size={18} />
-          <h2>生成モード</h2>
-        </div>
-        <div className="segmented generation-grid">
-          {generationOptions.map((option) => (
-            <button
-              key={option.value}
-              className={props.generationMode === option.value ? "active" : ""}
-              onClick={() => props.onGenerationModeChange(option.value)}
-            >
-              <strong>{option.label}</strong>
-              <span>{option.hint}</span>
-            </button>
-          ))}
-        </div>
-        <div className="codex-card">
-          <div>
-            <strong>{codexStatusLabel(props.codexStatus)}</strong>
-            <span>{codexStatusDetail(props.codexStatus)}</span>
-          </div>
-          <div className="codex-actions">
-            <button className="small-button" onClick={props.onRefreshCodexStatus}>
-              更新
-            </button>
-            <button className="small-button primary" onClick={props.onStartCodexLogin} disabled={props.isCodexLoginLoading}>
-              {props.isCodexLoginLoading ? "開始中" : "ログイン"}
-            </button>
-          </div>
-        </div>
-        {props.codexLogin?.type === "chatgptDeviceCode" && (
-          <div className="login-card">
-            <span>以下のURLでコードを入力</span>
-            <a href={props.codexLogin.verificationUrl} target="_blank" rel="noreferrer">
-              {props.codexLogin.verificationUrl}
-            </a>
-            <strong>{props.codexLogin.userCode}</strong>
-          </div>
-        )}
-        {props.codexLogin?.type === "chatgpt" && (
-          <div className="login-card">
-            <span>ブラウザでChatGPTログイン</span>
-            <a href={props.codexLogin.authUrl} target="_blank" rel="noreferrer">
-              ログイン画面を開く
-            </a>
-          </div>
-        )}
-      </section>
-
-      <section className="form-section">
-        <div className="section-title">
-          <Bike size={18} />
-          <h2>好み</h2>
-        </div>
-        <PreferenceSegment label="走りやすい道" value={props.preferences.road} labels={["控えめ", "ほどよく", "重視"]} onChange={(road) => props.onPreferencesChange({ ...props.preferences, road })} />
-        <PreferenceSegment label="景勝地" value={props.preferences.scenic} labels={["少なめ", "ほどよく", "重視"]} onChange={(scenic) => props.onPreferencesChange({ ...props.preferences, scenic })} />
-        <PreferenceSegment label="グルメ" value={props.preferences.gourmet} labels={["軽め", "ほどよく", "重視"]} onChange={(gourmet) => props.onPreferencesChange({ ...props.preferences, gourmet })} />
-        <PreferenceSegment label="ゆったり" value={props.preferences.relaxed} labels={["詰める", "標準", "ゆったり"]} onChange={(relaxed) => props.onPreferencesChange({ ...props.preferences, relaxed })} />
-        <div className="segmented">
-          <button className={props.tripStyle === "half_day" ? "active" : ""} onClick={() => props.onTripStyleChange("half_day")}>
-            半日
-          </button>
-          <button className={props.tripStyle === "day_trip" ? "active" : ""} onClick={() => props.onTripStyleChange("day_trip")}>
-            日帰り
-          </button>
-        </div>
-      </section>
-
-      <button className="generate-button" onClick={props.onGenerate} disabled={props.isLoading}>
-        <Search size={21} />
-        {props.isLoading ? "提案を作成中" : "この条件で提案する"}
+      <button
+        className="details-toggle"
+        onClick={() => setDetailsOpen((open) => !open)}
+        type="button"
+        aria-expanded={detailsOpen}
+        aria-controls="trip-detail-options"
+      >
+        <span>こだわり条件</span>
+        <ChevronDown size={18} className={detailsOpen ? "open" : ""} />
       </button>
+
+      {detailsOpen && (
+        <div className="details-panel" id="trip-detail-options">
+          <section>
+            <div className="section-title compact-title">
+              <Crosshair size={18} />
+              <h2>出発地プリセット</h2>
+            </div>
+            <div className="preset-grid route-pills">
+              {presets.map((preset) => (
+                <button key={preset.label} onClick={() => props.onOriginChange({ ...preset, source: "preset" })} type="button">
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <div className="section-title compact-title">
+              <Route size={18} />
+              <h2>高速道路</h2>
+            </div>
+            <div className="segmented highway-grid">
+              {highwayOptions.map((option) => (
+                <button
+                  key={option.value}
+                  className={props.highwayMode === option.value ? "active" : ""}
+                  onClick={() => props.onHighwayModeChange(option.value)}
+                  type="button"
+                >
+                  <strong>{option.label}</strong>
+                  <span>{option.hint}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <div className="section-title compact-title">
+              <Bike size={18} />
+              <h2>好み</h2>
+            </div>
+            <PreferenceSegment label="景色" value={props.preferences.scenic} labels={["少なめ", "ほどよく", "重視"]} onChange={(scenic) => props.onPreferencesChange({ ...props.preferences, scenic })} />
+            <PreferenceSegment label="グルメ" value={props.preferences.gourmet} labels={["軽め", "ほどよく", "重視"]} onChange={(gourmet) => props.onPreferencesChange({ ...props.preferences, gourmet })} />
+            <PreferenceSegment label="余裕" value={props.preferences.relaxed} labels={["詰める", "標準", "ゆったり"]} onChange={(relaxed) => props.onPreferencesChange({ ...props.preferences, relaxed })} />
+            <div className="segmented soft-segment">
+              <button className={props.tripStyle === "half_day" ? "active" : ""} onClick={() => props.onTripStyleChange("half_day")} type="button">
+                半日
+              </button>
+              <button className={props.tripStyle === "day_trip" ? "active" : ""} onClick={() => props.onTripStyleChange("day_trip")} type="button">
+                日帰り
+              </button>
+            </div>
+          </section>
+
+          <section className="diagnostic-panel">
+            <div className="section-title compact-title">
+              <Bot size={18} />
+              <h2>提案方法</h2>
+            </div>
+            <div className="segmented generation-grid">
+              {generationOptions.map((option) => (
+                <button
+                  key={option.value}
+                  className={props.generationMode === option.value ? "active" : ""}
+                  onClick={() => props.onGenerationModeChange(option.value)}
+                  type="button"
+                >
+                  <strong>{generationLabel(option.value)}</strong>
+                  <span>{option.hint}</span>
+                </button>
+              ))}
+            </div>
+            <div className="codex-card">
+              <div>
+                <strong>{codexStatusLabel(props.codexStatus)}</strong>
+                <span>{codexStatusDetail(props.codexStatus)}</span>
+              </div>
+              <div className="codex-actions">
+                <button className="small-button" onClick={props.onRefreshCodexStatus} type="button">
+                  更新
+                </button>
+                <button className="small-button primary" onClick={props.onStartCodexLogin} disabled={props.isCodexLoginLoading} type="button">
+                  {props.isCodexLoginLoading ? "開始中" : "ログイン"}
+                </button>
+              </div>
+            </div>
+            {props.codexLogin?.type === "chatgptDeviceCode" && (
+              <div className="login-card">
+                <span>以下のURLでコードを入力</span>
+                <a href={props.codexLogin.verificationUrl} target="_blank" rel="noreferrer">
+                  {props.codexLogin.verificationUrl}
+                </a>
+                <strong>{props.codexLogin.userCode}</strong>
+              </div>
+            )}
+            {props.codexLogin?.type === "chatgpt" && (
+              <div className="login-card">
+                <span>ブラウザでChatGPTログイン</span>
+                <a href={props.codexLogin.authUrl} target="_blank" rel="noreferrer">
+                  ログイン画面を開く
+                </a>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -811,33 +834,32 @@ function PlanList(props: {
 
   return (
     <div className="plan-list">
-      <p className="mode-pill">
-        {props.response.mode === "codex" ? "Codex提案" : "ローカル提案"} / ルートは目安
-      </p>
-      {props.response.fallbackReason && <p className="fallback-note">{props.response.fallbackReason}</p>}
+      <div className="candidate-intro">
+        <strong>{props.response.plans.length}つの候補</strong>
+        <span>{props.response.fallbackReason ? "登録スポットから候補を整えました" : "地図上のルートと合わせて選べます"}</span>
+      </div>
+      {props.response.fallbackReason && (
+        <details className="plan-diagnostic">
+          <summary>提案メモ</summary>
+          <p>高精度提案の結果が使えなかったため、登録データから提案しました。</p>
+        </details>
+      )}
       {props.response.plans.map((plan, index) => (
         <article key={plan.title} className={`plan-card ${props.selectedIndex === index ? "selected" : ""}`}>
           <button className="plan-main" onClick={() => props.onSelectPlan(plan, index)}>
-            <SpotImage stop={plan.stops[0]} />
-            <div>
+            <div className="plan-copy">
+              <div className="plan-metrics">
+                <span>{plan.estimatedDistanceKm}km</span>
+                <span>約{Math.round(plan.estimatedDurationMin / 10) * 10}分</span>
+                <span>{plan.highwayUsage}</span>
+              </div>
               <h2>{plan.title}</h2>
-              <p>{plan.summary}</p>
-              <p className="plan-appeal">{plan.appeal}</p>
-              <p className="route-story">{plan.routeStory}</p>
-              <div className="best-for">
-                {plan.bestFor.slice(0, 3).map((item) => (
+              <p className="plan-appeal">{plan.appeal || plan.summary}</p>
+              <div className="best-for compact-tags">
+                {planComparisonTags(plan).map((item) => (
                   <span key={item}>{item}</span>
                 ))}
               </div>
-              <div className="preference-fit">
-                {plan.preferenceFit.slice(0, 3).map((fit) => (
-                  <span key={fit}>{fit}</span>
-                ))}
-              </div>
-              <span>
-                約{plan.estimatedDistanceKm}km / 約{Math.round(plan.estimatedDurationMin / 10) * 10}分 / {plan.highwayUsage} /{" "}
-                {plan.routeSource === "osrm" ? "道路ルート" : "簡易目安"}
-              </span>
             </div>
           </button>
           <div className="stop-row">
@@ -866,16 +888,10 @@ function PlanItinerary(props: { plan: Plan | null; selectedSpot: PlanStop | null
   const activeSpot = props.selectedSpot ?? props.plan.stops[0] ?? null;
   return (
     <article className="spot-detail">
-      {activeSpot && <SpotImage stop={activeSpot} large />}
       <div className="spot-copy">
-        <p className="category-label">旅程 / {props.plan.estimatedDistanceKm}km / 約{Math.round(props.plan.estimatedDurationMin / 10) * 10}分</p>
+        <p className="category-label">{props.plan.estimatedDistanceKm}km / 約{Math.round(props.plan.estimatedDurationMin / 10) * 10}分</p>
         <h2>{props.plan.title}</h2>
-        <p>{props.plan.routeStory}</p>
-        <div className="best-for">
-          {props.plan.bestFor.slice(0, 3).map((item) => (
-            <span key={item}>{item}</span>
-          ))}
-        </div>
+        <p className="route-story">{props.plan.routeStory}</p>
         <div className="itinerary-list">
           {props.plan.stops.map((spot, index) => (
             <button
@@ -896,36 +912,28 @@ function PlanItinerary(props: { plan: Plan | null; selectedSpot: PlanStop | null
           <>
             <div className="itinerary-notes">
               <section>
-                <strong>魅力</strong>
+                <strong>名物</strong>
                 <p>{activeSpot.famousFor}</p>
               </section>
               <section>
-                <strong>ここに寄る理由</strong>
+                <strong>ここで何する</strong>
                 <p>{activeSpot.whyStopHere}</p>
               </section>
               <section>
-                <strong>ライダーメモ</strong>
+                <strong>走る人向け</strong>
                 <p>{activeSpot.riderNote}</p>
               </section>
               <section>
-                <strong>おすすめ</strong>
+                <strong>滞在</strong>
                 <p>{activeSpot.recommendedAction}</p>
               </section>
             </div>
             <div className="preference-fit">
-              {activeSpot.matchedPreferences.map((preference) => (
+              {activeSpot.matchedPreferences.slice(0, 2).map((preference) => (
                 <span key={preference}>{preferenceLabel(preference)}</span>
               ))}
-              <span>滞在目安: {activeSpot.timeHint}</span>
+              <span>{activeSpot.timeHint}</span>
             </div>
-            <p className="leg-note">{activeSpot.legNote}</p>
-            {activeSpot.images[0] ? (
-              <a href={activeSpot.images[0].sourceUrl} target="_blank" rel="noreferrer">
-                {activeSpot.images[0].credit} / {activeSpot.images[0].license}
-              </a>
-            ) : (
-              <span className="credit">画像なし: カテゴリ別プレースホルダー</span>
-            )}
           </>
         )}
       </div>
@@ -933,51 +941,120 @@ function PlanItinerary(props: { plan: Plan | null; selectedSpot: PlanStop | null
   );
 }
 
-function SpotImage({ stop, large = false }: { stop?: Pick<PlanStop, "name" | "category" | "images">; large?: boolean }) {
-  const [failed, setFailed] = useState(false);
-  const image = stop?.images?.[0];
-  useEffect(() => {
-    setFailed(false);
-  }, [image?.url, stop?.name]);
-  if (!image || failed) {
-    return (
-      <div className={`spot-image placeholder ${large ? "large" : ""} ${stop?.category ?? "road"}`}>
-        {categoryIcon(stop?.category ?? "road")}
-        <span>{stop ? categoryLabel(stop.category) : "Spot"}</span>
-      </div>
-    );
-  }
-  return <img className={`spot-image ${large ? "large" : ""}`} src={image.url} alt={image.alt || stop?.name} onError={() => setFailed(true)} loading="lazy" />;
+function messageForPlanResponse(response: PlanResponse) {
+  if (response.fallbackReason) return "登録スポットから候補を整えました。";
+  return "候補を地図に表示しました。";
 }
 
-function messageForPlanResponse(response: PlanResponse) {
-  if (response.mode === "codex") return "Codexが選んだスポットをサーバーで検証して表示しています。";
-  if (response.fallbackReason) return `${response.fallbackReason} ローカル提案を表示しています。`;
-  return "収集済みスポットからローカル提案を表示しています。";
+function previewRadiusKm(
+  type: "distance" | "duration",
+  value: number,
+  highwayMode: HighwayMode,
+  tripStyle: "half_day" | "day_trip",
+  relaxed: PreferenceLevel
+) {
+  const tripStyleBuffer = tripStyle === "half_day" ? 0.72 : 1;
+  const budgetDistance =
+    type === "distance"
+      ? value * tripStyleBuffer
+      : speedForHighwayMode(highwayMode) * (value / 60) * (relaxed === "high" ? 0.82 : 0.9) * tripStyleBuffer;
+  return Math.max(8, budgetDistance / 2.4);
+}
+
+function speedForHighwayMode(mode: HighwayMode) {
+  return mode === "full" ? 68 : 43;
+}
+
+function formatRangeValue(type: "distance" | "duration", value: number) {
+  if (type === "distance") return `${value}km`;
+  const hours = value / 60;
+  if (Number.isInteger(hours)) return `約${hours}時間`;
+  const wholeHours = Math.floor(hours);
+  const minutes = value % 60;
+  return wholeHours > 0 ? `約${wholeHours}時間${minutes}分` : `約${minutes}分`;
+}
+
+function planComparisonTags(plan: Plan) {
+  const tags: string[] = [];
+  const categories = new Set(plan.stops.map((stop) => stop.category));
+  if (categories.has("scenic")) tags.push("景色向き");
+  if (categories.has("gourmet")) tags.push("食事あり");
+  if (categories.has("rest")) tags.push("休憩あり");
+  if (plan.routeSource === "fallback") tags.push("簡易ルート");
+  if (plan.stops.length >= 3) tags.push("寄り道多め");
+  if (plan.estimatedDurationMin <= 150) tags.push("短め");
+  if (plan.estimatedDurationMin >= 240) tags.push("しっかり");
+  return tags.slice(0, 4);
+}
+
+function spotPopupHtml(spot: Spot) {
+  const image = spot.images[0];
+  const imageHtml = image
+    ? `<img class="map-popup-image" src="${escapeHtml(image.url)}" alt="${escapeHtml(image.alt || spot.name)}" loading="lazy" />`
+    : "";
+  const creditHtml = image
+    ? `<a class="map-popup-credit" href="${escapeHtml(image.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(image.credit)} / ${escapeHtml(image.license)}</a>`
+    : "";
+  return `
+    <article class="map-popup-card">
+      ${imageHtml}
+      <div class="map-popup-copy">
+        <span>${escapeHtml(categoryLabel(spot.category))} / ${escapeHtml(spot.area)}</span>
+        <strong>${escapeHtml(spot.name)}</strong>
+        <p>${escapeHtml(spot.description)}</p>
+        ${creditHtml}
+      </div>
+    </article>
+  `;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatConstraint(type: "distance" | "duration", value: number) {
+  return type === "duration" ? `往復走行 ${formatRangeValue(type, value)}` : `往復距離 約${value}km`;
+}
+
+function highwayLabel(mode: HighwayMode) {
+  return highwayOptions.find((option) => option.value === mode)?.label ?? "高速道路";
+}
+
+function generationLabel(mode: GenerationMode) {
+  if (mode === "codex") return "高精度提案";
+  if (mode === "local") return "登録データ";
+  return "おすすめ";
+}
+
+function preferenceLevelLabel(level: PreferenceLevel) {
+  if (level === "high") return "重視";
+  if (level === "low") return "控えめ";
+  return "ほどよく";
 }
 
 function statusMessage(status: CodexStatus) {
-  if (!status.codexAvailable) return status.message || "Codex app-serverを利用できません。";
-  if (status.authMode === "chatgpt") return `Codexログイン済みです${status.planType ? `（${status.planType}）` : ""}。`;
-  return "Codexは未ログインです。自動モードではローカル生成に切り替わります。";
+  if (!status.codexAvailable) return status.message || "高精度提案を利用できません。";
+  if (status.authMode === "chatgpt") return `高精度提案を利用できます${status.planType ? `（${status.planType}）` : ""}。`;
+  return "未ログイン時は登録データで提案します。";
 }
 
 function codexStatusLabel(status: CodexStatus | null) {
-  if (!status) return "Codex状態を確認中";
-  if (!status.codexAvailable) return "Codex利用不可";
-  if (status.authMode === "chatgpt") return "Codexログイン済み";
-  return "Codex未ログイン";
+  if (!status) return "提案機能を確認中";
+  if (!status.codexAvailable) return "高精度提案は利用不可";
+  if (status.authMode === "chatgpt") return "高精度提案を利用可能";
+  return "登録データで提案";
 }
 
 function codexStatusDetail(status: CodexStatus | null) {
   if (!status) return "自動モードは確認後に利用します";
-  if (!status.codexAvailable) return status.message || "app-serverを起動できません";
+  if (!status.codexAvailable) return status.message || "高精度提案を起動できません";
   if (status.authMode === "chatgpt") return status.planType ? `ChatGPT ${status.planType}` : "ChatGPT認証";
-  return "未ログイン時はローカルJSONで生成します";
-}
-
-function sourceLabel(source: string) {
-  return source === "gps" ? "GPS" : source === "manual" ? "手動" : "プリセット";
+  return "ログインなしでも登録データで使えます";
 }
 
 function preferenceLabel(preference: keyof PlanRequest["preferences"]) {
@@ -1000,7 +1077,7 @@ function categoryColor(category: string) {
     case "scenic":
       return "#16a34a";
     case "road":
-      return "#f97316";
+      return "#2563eb";
     case "rest":
       return "#2563eb";
     default:

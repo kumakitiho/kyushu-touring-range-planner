@@ -1,6 +1,13 @@
 import type { PlanRequest, PlanResponse } from "../src/shared/types";
 import { selectCodexCandidates, type CodexPlanProvider, type CodexProviderStatus } from "./codexProvider";
-import { buildLocalPlans, buildPlanFromSpotIds, buildPlanResponse, filterCandidates } from "./planner";
+import {
+  buildLocalPlans,
+  buildPlanAroundAnchor,
+  buildPlanFromSpotIds,
+  buildPlanResponse,
+  filterCandidates,
+  focusForPlan
+} from "./planner";
 
 export async function buildPlansWithMode(
   request: PlanRequest,
@@ -22,35 +29,100 @@ export async function buildPlansWithMode(
     const allowedSpotIds = new Set(codexCandidates.map((spot) => spot.id));
     const drafts = await codexProvider.generatePlanDrafts(request, codexCandidates);
     const selectedDrafts = drafts.slice(0, request.count);
-    if (selectedDrafts.length === 0) throw new Error("Codex did not return valid spot candidates.");
+    if (selectedDrafts.some((draft) => draft.spotIds.some((id) => !allowedSpotIds.has(id)))) {
+      throw new Error("Codex returned an invalid spot selection outside the registered candidates.");
+    }
+    if (selectedDrafts.length !== request.count) {
+      throw new Error(
+        `Codex returned an invalid spot selection: ${selectedDrafts.length} plans returned; ${request.count} are required.`
+      );
+    }
 
-    const plans = await Promise.all(
-      selectedDrafts.map((draft) =>
-        buildPlanFromSpotIds(
+    const validPlans: Array<NonNullable<Awaited<ReturnType<typeof buildPlanFromSpotIds>>> | undefined> = Array(
+      request.count
+    );
+    const remainingDrafts = [...selectedDrafts];
+    const matchOrder = Array.from({ length: request.count }, (_, index) => index).sort(
+      (a, b) => focusMatchPriority(focusForPlan(request, a)) - focusMatchPriority(focusForPlan(request, b))
+    );
+    for (const index of matchOrder) {
+      const focus = focusForPlan(request, index);
+      let matchedPlan: Awaited<ReturnType<typeof buildPlanFromSpotIds>> = null;
+      for (let draftIndex = 0; draftIndex < remainingDrafts.length; draftIndex += 1) {
+        const draft = remainingDrafts[draftIndex];
+        const copy = {
+          title: draft.title,
+          summary: draft.summary,
+          appeal: draft.appeal,
+          bestFor: draft.bestFor,
+          routeStory: draft.routeStory,
+          preferenceFit: draft.preferenceFit,
+          highlights: draft.highlights,
+          cautions: draft.cautions
+        };
+        let plan = await buildPlanFromSpotIds(
           request,
           draft.spotIds,
-          {
-            title: draft.title,
-            summary: draft.summary,
-            appeal: draft.appeal,
-            bestFor: draft.bestFor,
-            routeStory: draft.routeStory,
-            preferenceFit: draft.preferenceFit,
-            highlights: draft.highlights,
-            cautions: draft.cautions
-          },
+          copy,
           "codex",
-          allowedSpotIds
-        )
-      )
-    );
+          allowedSpotIds,
+          focus
+        );
+        if (!plan) {
+          for (const anchorId of draft.spotIds) {
+            plan = await buildPlanAroundAnchor(request, codexCandidates, anchorId, focus, copy, "codex");
+            if (plan) break;
+          }
+        }
+        if (!plan) continue;
+        if (isDuplicatePlan(validPlans, plan)) continue;
+        matchedPlan = plan;
+        remainingDrafts.splice(draftIndex, 1);
+        break;
+      }
+      if (!matchedPlan) {
+        console.warn(
+          "[codex-plan-validation]",
+          JSON.stringify({
+            focus,
+            drafts: remainingDrafts.map((draft) => ({ spotIds: draft.spotIds }))
+          })
+        );
+        throw new Error(`Codex returned no valid ${focus} plan from the registered candidates.`);
+      }
+      validPlans[index] = matchedPlan;
+    }
 
-    if (plans.some((plan) => !plan)) throw new Error("Codex returned an invalid spot selection.");
-    const validPlans = plans.filter((plan): plan is NonNullable<typeof plan> => Boolean(plan));
-    return buildPlanResponse(request, candidates, validPlans, "codex", { providerStatus });
+    return buildPlanResponse(
+      request,
+      candidates,
+      validPlans.filter((plan): plan is NonNullable<typeof plan> => Boolean(plan)),
+      "codex",
+      { providerStatus }
+    );
   } catch (error) {
     return localFallback(request, error instanceof Error ? error.message : String(error), providerStatus);
   }
+}
+
+function focusMatchPriority(focus: ReturnType<typeof focusForPlan>): number {
+  if (focus === "road") return 0;
+  if (focus === "gourmet") return 1;
+  return 2;
+}
+
+function isDuplicatePlan(
+  plans: Array<NonNullable<Awaited<ReturnType<typeof buildPlanFromSpotIds>>> | undefined>,
+  candidate: NonNullable<Awaited<ReturnType<typeof buildPlanFromSpotIds>>>
+): boolean {
+  const signature = candidate.stops.map((stop) => stop.spotId).join(">");
+  const mainId = candidate.stops.find((stop) => candidate.title.includes(stop.name))?.spotId;
+  return plans.some((plan) => {
+    if (!plan) return false;
+    const existingSignature = plan.stops.map((stop) => stop.spotId).join(">");
+    const existingMainId = plan.stops.find((stop) => plan.title.includes(stop.name))?.spotId;
+    return existingSignature === signature || (mainId !== undefined && existingMainId === mainId);
+  });
 }
 
 async function localFallback(

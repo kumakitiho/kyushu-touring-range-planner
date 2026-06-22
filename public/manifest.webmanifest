@@ -1,0 +1,18 @@
+{
+  "name": "九州ツーリングルート",
+  "short_name": "ツーリング",
+  "description": "条件に合う九州の日帰りツーリングルートを提案します。",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#e7f1f8",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

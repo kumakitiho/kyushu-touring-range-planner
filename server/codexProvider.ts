@@ -5,6 +5,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { z } from "zod";
 import type { PlanRequest, Spot } from "../src/shared/types";
+import { focusForPlan } from "./planner";
 
 export type CodexProviderStatus = {
   codexAvailable: boolean;
@@ -109,7 +110,25 @@ const PLAN_SELECTOR_INSTRUCTIONS = [
 ].join("\n");
 
 export function selectCodexCandidates(candidates: Spot[]): Spot[] {
-  return candidates.slice(0, codexPlanCandidateLimit());
+  const limit = codexPlanCandidateLimit();
+  if (limit < 3) return candidates.slice(0, limit);
+  const selected: Spot[] = [];
+  const quota = Math.max(1, Math.floor(limit / 4));
+  const buckets = [
+    candidates.filter((spot) => spot.category === "road"),
+    candidates.filter((spot) => spot.category === "gourmet" && spot.tags.includes("famous")),
+    candidates.filter((spot) => spot.category === "scenic")
+  ];
+  for (const bucket of buckets) {
+    for (const spot of bucket.slice(0, quota)) {
+      if (!selected.some((candidate) => candidate.id === spot.id)) selected.push(spot);
+    }
+  }
+  for (const spot of candidates) {
+    if (selected.length >= limit) break;
+    if (!selected.some((candidate) => candidate.id === spot.id)) selected.push(spot);
+  }
+  return selected.slice(0, limit);
 }
 
 export class AppServerCodexProvider implements CodexPlanProvider {
@@ -743,6 +762,7 @@ function codexOutputSchema() {
 }
 
 function buildPreferencePrompt(request: PlanRequest, candidates: Spot[]): string {
+  const requiredFocuses = Array.from({ length: request.count }, (_, index) => focusForPlan(request, index));
   const candidateSummaries = selectCodexCandidates(candidates).map((spot) => ({
     id: spot.id,
     name: spot.name,
@@ -758,6 +778,10 @@ function buildPreferencePrompt(request: PlanRequest, candidates: Spot[]): string
     "必ず候補に含まれるspot idだけを使ってください。存在しないスポットは作らないでください。",
     "出発地を中心に東へ行って戻って西へ行くような不自然な往復は避け、1つの方面にまとまるプランにしてください。",
     "preferencesは3段階です。lowは控えめ、mediumはほどよく、highは重視として、highの条件をプラン選定と文章に明確に反映してください。",
+    "gourmet/scenic/roadの最高値を各プランの主役にしてください。同率ならプランごとに景色、グルメ、走りへ分散してください。",
+    `plansは必ず${request.count}件返し、主役の順番を${JSON.stringify(requiredFocuses)}にしてください。`,
+    "景色主役は代表景勝地+famousタグのグルメ+任意の景勝地、グルメ主役はfamousタグのグルメ+近隣景勝地+任意の景勝地、走り主役はroadカテゴリ+famousタグのグルメ+景勝地で構成してください。",
+    "一般飲食店を有名グルメとして扱わず、グルメ目的地には必ずfamousタグの候補だけを使ってください。",
     "距離・時間・ルート形状はサーバー側で検証します。あなたはspotIds、タイトル、要約、魅力、好みとの相性、見どころ、注意点だけをJSONで返してください。",
     JSON.stringify({
       request,

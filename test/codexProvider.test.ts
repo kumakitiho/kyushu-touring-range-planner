@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AppServerCodexProvider } from "../server/codexProvider";
+import { AppServerCodexProvider, selectCodexCandidates } from "../server/codexProvider";
 import type { PlanRequest, Spot } from "../src/shared/types";
 
 describe("codex provider event buffering", () => {
@@ -141,6 +141,24 @@ describe("codex provider event buffering", () => {
       } else {
         process.env.CODEX_PLAN_CANDIDATE_LIMIT = previousLimit;
       }
+    }
+  });
+
+  it("reserves road, famous gourmet, and scenic candidates within the Codex limit", () => {
+    const previousLimit = process.env.CODEX_PLAN_CANDIDATE_LIMIT;
+    process.env.CODEX_PLAN_CANDIDATE_LIMIT = "6";
+    try {
+      const scenic = Array.from({ length: 8 }, (_, index) => spotWithId(`scenic-${index}`));
+      const road: Spot = { ...spotWithId("road-1"), category: "road", tags: ["famous"] };
+      const gourmet: Spot = { ...spotWithId("gourmet-1"), category: "gourmet", tags: ["famous"] };
+      const selected = selectCodexCandidates([...scenic, road, gourmet]);
+      expect(selected).toHaveLength(6);
+      expect(selected.some((spot) => spot.category === "road")).toBe(true);
+      expect(selected.some((spot) => spot.category === "gourmet" && spot.tags.includes("famous"))).toBe(true);
+      expect(selected.some((spot) => spot.category === "scenic")).toBe(true);
+    } finally {
+      if (previousLimit === undefined) delete process.env.CODEX_PLAN_CANDIDATE_LIMIT;
+      else process.env.CODEX_PLAN_CANDIDATE_LIMIT = previousLimit;
     }
   });
 

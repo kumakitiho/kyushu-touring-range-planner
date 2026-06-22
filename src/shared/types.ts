@@ -1,12 +1,6 @@
 import { z } from "zod";
 
-export const highwayModes = [
-  "none",
-  "full",
-  "outbound_only",
-  "return_only",
-  "local_only_after_highway"
-] as const;
+export const highwayModes = ["none", "full"] as const;
 
 export const generationModes = ["auto", "codex", "local"] as const;
 export const preferenceLevels = ["low", "medium", "high"] as const;
