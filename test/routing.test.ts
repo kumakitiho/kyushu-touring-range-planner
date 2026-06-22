@@ -5,9 +5,11 @@ describe("routing", () => {
   beforeEach(() => {
     clearRouteCache();
     vi.stubEnv("OSRM_BASE_URL", "http://mock-osrm");
+    vi.stubEnv("OSRM_MIN_INTERVAL_MS", "0");
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
 
@@ -44,5 +46,40 @@ describe("routing", () => {
     await resolveRoute(points, "none");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("serializes public OSRM requests with a minimum interval", async () => {
+    vi.stubEnv("OSRM_MIN_INTERVAL_MS", "25");
+    const startedAt: number[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        startedAt.push(Date.now());
+        return new Response(JSON.stringify({ code: "NoRoute", routes: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      })
+    );
+
+    await Promise.all([
+      resolveRoute(
+        [
+          [33.59, 130.4],
+          [33.6, 130.5]
+        ],
+        "none"
+      ),
+      resolveRoute(
+        [
+          [33.59, 130.4],
+          [33.7, 130.6]
+        ],
+        "none"
+      )
+    ]);
+
+    expect(startedAt).toHaveLength(2);
+    expect(startedAt[1] - startedAt[0]).toBeGreaterThanOrEqual(20);
   });
 });

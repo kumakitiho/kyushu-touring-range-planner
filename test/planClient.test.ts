@@ -19,8 +19,9 @@ afterEach(() => {
 
 describe("requestPlans", () => {
   it("falls back to the bundled spot data when the API is unavailable", async () => {
-    vi.stubEnv("OSRM_BASE_URL", "off");
     const fetcher = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    const remoteFetch = vi.fn();
+    vi.stubGlobal("fetch", remoteFetch);
 
     const response = await requestPlans(request, fetcher as unknown as typeof fetch);
 
@@ -28,5 +29,6 @@ describe("requestPlans", () => {
     expect(response.plans.length).toBeGreaterThan(0);
     expect(response.fallbackReason).toContain("端末の登録スポット");
     expect(response.providerStatus?.codexAvailable).toBe(false);
+    expect(remoteFetch).not.toHaveBeenCalled();
   });
 });

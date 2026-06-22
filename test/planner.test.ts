@@ -49,9 +49,11 @@ describe("planner fallback", () => {
   beforeEach(() => {
     clearRouteCache();
     vi.stubEnv("OSRM_BASE_URL", "off");
+    vi.stubEnv("OSRM_MIN_INTERVAL_MS", "0");
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
 
@@ -103,6 +105,35 @@ describe("planner fallback", () => {
     });
     const signatures = new Set(response.plans.map((plan) => plan.stops.map((stop) => stop.spotId).join(">")));
     expect(signatures.size).toBeGreaterThan(1);
+  });
+
+  it("rejects unsafe image URLs and invalid origin coordinates", () => {
+    expect(() =>
+      PlanRequestSchema.parse({
+        ...baseRequest,
+        origin: { ...baseRequest.origin, lat: 120 }
+      })
+    ).toThrow();
+    expect(() =>
+      PlanResponseSchema.parse({
+        plans: [],
+        reachableArea: { type: "approx_circle", center: [33.59, 130.4], radiusKm: 10, coordinates: [] },
+        candidates: [
+          {
+            id: "unsafe",
+            name: "unsafe",
+            category: "scenic",
+            lat: 33.59,
+            lng: 130.4,
+            area: "test",
+            tags: [],
+            description: "test",
+            images: [{ url: "//attacker.example/image", alt: "", credit: "", license: "", sourceUrl: "javascript:alert(1)" }]
+          }
+        ],
+        mode: "local"
+      })
+    ).toThrow();
   });
 
   it("includes a famous-gourmet-led option when scenic, gourmet, and road preferences are tied", async () => {

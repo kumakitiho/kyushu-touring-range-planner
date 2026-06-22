@@ -132,9 +132,9 @@ export function App() {
     L.control.zoom({ position: "topright" }).addTo(map);
     L.control
       .attribution({ position: "bottomright", prefix: false })
-      .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>')
+      .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>')
       .addTo(map);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19
     }).addTo(map);
 
@@ -477,11 +477,6 @@ export function App() {
             <span>{loadingMessages[loadingStep]}</span>
           </div>
         )}
-        <div className="top-bar">
-          <button className="icon-button" onClick={useCurrentLocation} aria-label="現在地を使う">
-            <LocateFixed size={21} />
-          </button>
-        </div>
       </section>
 
       <section className={`bottom-sheet ${sheetMode}`} aria-label="プラン操作パネル">
@@ -597,6 +592,13 @@ function InputPanel(props: {
 
   return (
     <div className="trip-setup">
+      <aside className="location-disclosure">
+        現在地は保存しません。地図表示では
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
+        へ、ローカルAPIで道路ルートを計算する場合は
+        <a href="https://project-osrm.org/" target="_blank" rel="noreferrer">OSRM</a>
+        へ座標が送信されます。
+      </aside>
       <section className="trip-condition-card">
         <div className="origin-strip">
           <div className="origin-dot">
@@ -781,6 +783,7 @@ function InputPanel(props: {
               </div>
             )}
           </section>
+
         </div>
       )}
     </div>

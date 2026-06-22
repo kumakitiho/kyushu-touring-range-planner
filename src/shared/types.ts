@@ -6,13 +6,21 @@ export const generationModes = ["auto", "codex", "local"] as const;
 export const preferenceLevels = ["low", "medium", "high"] as const;
 
 const PreferenceSchema = z.enum(preferenceLevels);
+const SafeImageUrlSchema = z
+  .string()
+  .min(1)
+  .refine(
+    (value) => (value.startsWith("/") && !value.startsWith("//")) || value.startsWith("https://"),
+    "Image URL must be HTTPS or same-origin relative"
+  );
+const SafeSourceUrlSchema = z.string().url().refine((value) => value.startsWith("https://"), "Source URL must use HTTPS");
 
 export const SpotImageSchema = z.object({
-  url: z.string().min(1),
+  url: SafeImageUrlSchema,
   alt: z.string(),
   credit: z.string(),
   license: z.string(),
-  sourceUrl: z.string().url()
+  sourceUrl: SafeSourceUrlSchema
 });
 
 export const SpotSchema = z.object({
@@ -29,9 +37,9 @@ export const SpotSchema = z.object({
 
 export const PlanRequestSchema = z.object({
   origin: z.object({
-    label: z.string().min(1),
-    lat: z.number(),
-    lng: z.number(),
+    label: z.string().min(1).max(100),
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
     source: z.enum(["gps", "manual", "preset"])
   }),
   constraint: z.discriminatedUnion("type", [

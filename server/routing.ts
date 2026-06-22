@@ -32,11 +32,13 @@ const OSRM_CACHE_MAX_ENTRIES = 200;
 const OSRM_CACHE_SUCCESS_TTL_MS = 5 * 60 * 1000;
 const OSRM_CACHE_FAILURE_TTL_MS = 15 * 1000;
 const osrmCache = new Map<string, OsrmCacheEntry>();
+let remoteRoutingEnabled = true;
 let activeOsrmRequests = 0;
+let nextOsrmRequestAt = 0;
 const osrmQueue: Array<() => void> = [];
 
 export async function resolveRoute(points: LatLngTuple[], mode: HighwayMode): Promise<RouteResult> {
-  if (points.length < 2) return approximateRoute(points, mode);
+  if (points.length < 2 || !remoteRoutingEnabled) return approximateRoute(points, mode);
   const routed = await fetchOsrmRoute(points);
   return routed ?? approximateRoute(points, mode);
 }
@@ -136,6 +138,7 @@ async function withOsrmSlot<T>(task: () => Promise<T>): Promise<T> {
   }
   activeOsrmRequests += 1;
   try {
+    await waitForOsrmRateLimit();
     return await task();
   } finally {
     activeOsrmRequests -= 1;
@@ -144,8 +147,21 @@ async function withOsrmSlot<T>(task: () => Promise<T>): Promise<T> {
 }
 
 function osrmMaxConcurrent(): number {
-  const parsed = Number(environmentValue("OSRM_MAX_CONCURRENT") ?? 2);
-  return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : 2;
+  const parsed = Number(environmentValue("OSRM_MAX_CONCURRENT") ?? 1);
+  return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : 1;
+}
+
+async function waitForOsrmRateLimit() {
+  const intervalMs = osrmMinIntervalMs();
+  const now = Date.now();
+  const waitMs = Math.max(0, nextOsrmRequestAt - now);
+  nextOsrmRequestAt = Math.max(now, nextOsrmRequestAt) + intervalMs;
+  if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+}
+
+function osrmMinIntervalMs(): number {
+  const parsed = Number(environmentValue("OSRM_MIN_INTERVAL_MS") ?? 1100);
+  return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 1100;
 }
 
 function environmentValue(name: string): string | undefined {
@@ -162,6 +178,11 @@ function trimRouteCache() {
 
 export function clearRouteCache() {
   osrmCache.clear();
+  nextOsrmRequestAt = 0;
+}
+
+export function setRemoteRoutingEnabled(enabled: boolean) {
+  remoteRoutingEnabled = enabled;
 }
 
 export function speedForMode(mode: HighwayMode): number {
