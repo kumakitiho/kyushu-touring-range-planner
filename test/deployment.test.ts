@@ -8,6 +8,7 @@ describe("GitHub Pages deployment", () => {
     const actionReferences = [...workflow.matchAll(/uses:\s+[^\s]+@([^\s#]+)/g)].map((match) => match[1]);
     expect(actionReferences).toHaveLength(5);
     expect(actionReferences.every((reference) => /^[0-9a-f]{40}$/.test(reference))).toBe(true);
+    expect(workflow.match(/^\s+with:/gm)).toHaveLength(2);
     expect(workflow).toContain("pages: write");
     expect(workflow.indexOf("pages: write")).toBeGreaterThan(workflow.indexOf("deploy:"));
   });
