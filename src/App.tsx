@@ -593,11 +593,14 @@ function InputPanel(props: {
   return (
     <div className="trip-setup">
       <aside className="location-disclosure">
-        現在地は保存しません。地図表示では
+        本アプリは現在地を保存しません。地図表示では
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
-        へ、ローカルAPIで道路ルートを計算する場合は
+        へ、道路ルートの計算では
         <a href="https://project-osrm.org/" target="_blank" rel="noreferrer">OSRM</a>
-        へ座標が送信されます。
+        へ座標が送信され、運営側のログに保存される場合があります。
+        <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noreferrer">プライバシー・利用条件</a>
+        <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noreferrer">地図の誤りを報告</a>
+        <a href="mailto:s.kuma100ten@gmail.com">s.kuma100ten@gmail.com</a>
       </aside>
       <section className="trip-condition-card">
         <div className="origin-strip">

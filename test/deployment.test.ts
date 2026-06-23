@@ -26,9 +26,16 @@ describe("GitHub Pages deployment", () => {
     expect(index).toContain('name="robots" content="noindex, nofollow, noarchive"');
     expect(index).toContain('http-equiv="Content-Security-Policy"');
     const csp = index.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1] ?? "";
-    expect(csp.split(";").map((directive) => directive.trim())).toContain("connect-src 'self'");
+    expect(csp.split(";").map((directive) => directive.trim())).toContain(
+      "connect-src 'self' https://router.project-osrm.org"
+    );
+    expect(readFileSync("server/routing.ts", "utf8")).toContain("navigator.locks.request");
     expect(robots).toContain("Disallow: /");
     expect(app).toContain("OpenStreetMap contributors");
-    expect(app.indexOf("現在地は保存しません")).toBeLessThan(app.indexOf('className="locate-chip"'));
+    expect(app.indexOf("本アプリは現在地を保存しません")).toBeLessThan(app.indexOf('className="locate-chip"'));
+    expect(app).toContain("https://www.openstreetmap.org/fixthemap");
+    expect(app).toContain("https://routing.openstreetmap.de/about.html");
+    expect(app).toContain("運営側のログに保存される場合があります");
+    expect(app).toContain('href="mailto:s.kuma100ten@gmail.com"');
   });
 });

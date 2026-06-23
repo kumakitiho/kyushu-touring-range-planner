@@ -1,5 +1,5 @@
 import { buildLocalPlans } from "../../server/planner";
-import { setRemoteRoutingEnabled } from "../../server/routing";
+import { beginRoutingBudget } from "../../server/routing";
 import { PlanResponseSchema, type PlanRequest, type PlanResponse } from "../shared/types";
 
 const OFFLINE_FALLBACK_REASON = "高精度提案サーバーへ接続できないため、この端末の登録スポットから提案しました。";
@@ -15,8 +15,8 @@ export async function requestPlans(request: PlanRequest, fetcher: typeof fetch =
     return PlanResponseSchema.parse(await response.json());
   } catch (error) {
     console.warn("Plan API unavailable; using bundled spot data", error);
-    setRemoteRoutingEnabled(false);
-    const response = await buildLocalPlans({ ...request, generationMode: "local" });
+    const finishRoutingBudget = beginRoutingBudget(12, 18_000);
+    const response = await buildLocalPlans({ ...request, generationMode: "local" }).finally(finishRoutingBudget);
     return {
       ...response,
       fallbackReason: OFFLINE_FALLBACK_REASON,

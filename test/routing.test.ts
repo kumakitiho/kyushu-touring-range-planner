@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearRouteCache, resolveRoute } from "../server/routing";
+import { beginRoutingBudget, clearRouteCache, resolveRoute } from "../server/routing";
 
 describe("routing", () => {
   beforeEach(() => {
@@ -81,5 +81,51 @@ describe("routing", () => {
 
     expect(startedAt).toHaveLength(2);
     expect(startedAt[1] - startedAt[0]).toBeGreaterThanOrEqual(20);
+  });
+
+  it("stops external routing when the generation request budget is exhausted", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ code: "NoRoute", routes: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const finishBudget = beginRoutingBudget(1, 10_000);
+
+    await resolveRoute(
+      [
+        [33.59, 130.4],
+        [33.6, 130.5]
+      ],
+      "none"
+    );
+    await resolveRoute(
+      [
+        [33.59, 130.4],
+        [33.7, 130.6]
+      ],
+      "none"
+    );
+    finishBudget();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start a request after the generation deadline", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const finishBudget = beginRoutingBudget(5, 0);
+
+    await resolveRoute(
+      [
+        [33.59, 130.4],
+        [33.6, 130.5]
+      ],
+      "none"
+    );
+    finishBudget();
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

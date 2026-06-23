@@ -28,17 +28,24 @@ type OsrmCacheEntry = {
   request: Promise<RouteResult | null>;
 };
 
+type RoutingBudget = {
+  requestsLeft: number;
+  deadline: number;
+};
+
 const OSRM_CACHE_MAX_ENTRIES = 200;
 const OSRM_CACHE_SUCCESS_TTL_MS = 5 * 60 * 1000;
 const OSRM_CACHE_FAILURE_TTL_MS = 15 * 1000;
+const OSRM_BROWSER_LOCK_NAME = "kyushu-touring-osrm-demo";
+const OSRM_BROWSER_NEXT_REQUEST_KEY = "kyushu-touring-osrm-next-request-at";
 const osrmCache = new Map<string, OsrmCacheEntry>();
-let remoteRoutingEnabled = true;
 let activeOsrmRequests = 0;
 let nextOsrmRequestAt = 0;
+let routingBudget: RoutingBudget | null = null;
 const osrmQueue: Array<() => void> = [];
 
 export async function resolveRoute(points: LatLngTuple[], mode: HighwayMode): Promise<RouteResult> {
-  if (points.length < 2 || !remoteRoutingEnabled) return approximateRoute(points, mode);
+  if (points.length < 2) return approximateRoute(points, mode);
   const routed = await fetchOsrmRoute(points);
   return routed ?? approximateRoute(points, mode);
 }
@@ -56,17 +63,21 @@ export function approximateRoute(points: LatLngTuple[], mode: HighwayMode): Rout
 async function fetchOsrmRoute(points: LatLngTuple[]): Promise<RouteResult | null> {
   const baseUrl = environmentValue("OSRM_BASE_URL") || "https://router.project-osrm.org";
   if (baseUrl === "off") return null;
+  if (isBrowserPublicDemo(baseUrl) && !canCoordinateBrowserRequests()) return null;
   const coordinates = points.map(([lat, lng]) => `${lng},${lat}`).join(";");
   const url = `${baseUrl.replace(/\/$/, "")}/route/v1/driving/${coordinates}?overview=full&geometries=geojson&steps=false`;
   const now = Date.now();
   const cached = osrmCache.get(url);
   if (cached && cached.expiresAt > now) return cached.request;
   if (cached) osrmCache.delete(url);
+  if (!consumeRoutingBudget()) return null;
 
   const request = withOsrmSlot(async () => {
     try {
+      const budgetTimeLeft = routingBudget ? routingBudget.deadline - Date.now() : Number.POSITIVE_INFINITY;
+      if (budgetTimeLeft <= 0) return null;
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4500);
+      const timeout = setTimeout(() => controller.abort(), Math.min(4500, budgetTimeLeft));
       try {
         const response = await fetch(url, {
           signal: controller.signal,
@@ -98,13 +109,15 @@ async function fetchOsrmRoute(points: LatLngTuple[]): Promise<RouteResult | null
     } catch {
       return null;
     }
-  }).then((result) => {
+  })
+    .catch(() => null)
+    .then((result) => {
     const entry = osrmCache.get(url);
     if (entry?.request === request) {
       entry.expiresAt = Date.now() + (result ? OSRM_CACHE_SUCCESS_TTL_MS : OSRM_CACHE_FAILURE_TTL_MS);
     }
-    return result;
-  });
+      return result;
+    });
 
   osrmCache.set(url, {
     expiresAt: now + OSRM_CACHE_FAILURE_TTL_MS,
@@ -138,8 +151,7 @@ async function withOsrmSlot<T>(task: () => Promise<T>): Promise<T> {
   }
   activeOsrmRequests += 1;
   try {
-    await waitForOsrmRateLimit();
-    return await task();
+    return await runWithOsrmRateLimit(task);
   } finally {
     activeOsrmRequests -= 1;
     osrmQueue.shift()?.();
@@ -151,11 +163,67 @@ function osrmMaxConcurrent(): number {
   return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : 1;
 }
 
-async function waitForOsrmRateLimit() {
+async function runWithOsrmRateLimit<T>(task: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    return navigator.locks.request(OSRM_BROWSER_LOCK_NAME, async () => {
+      await waitForOsrmRateLimit(true);
+      return task();
+    });
+  }
+  await waitForOsrmRateLimit(false);
+  return task();
+}
+
+function isBrowserPublicDemo(baseUrl: string) {
+  return typeof window !== "undefined" && baseUrl.replace(/\/$/, "") === "https://router.project-osrm.org";
+}
+
+function canCoordinateBrowserRequests() {
+  if (typeof navigator === "undefined" || !navigator.locks) return false;
+  const probeKey = `${OSRM_BROWSER_NEXT_REQUEST_KEY}-probe`;
+  try {
+    localStorage.getItem(OSRM_BROWSER_NEXT_REQUEST_KEY);
+    localStorage.setItem(probeKey, "1");
+    if (localStorage.getItem(probeKey) !== "1") return false;
+    localStorage.removeItem(probeKey);
+    return true;
+  } catch {
+    try {
+      localStorage.removeItem(probeKey);
+    } catch {
+      // Storage is unavailable; public routing remains disabled.
+    }
+    return false;
+  }
+}
+
+function consumeRoutingBudget() {
+  if (!routingBudget) return true;
+  if (routingBudget.requestsLeft <= 0 || Date.now() >= routingBudget.deadline) return false;
+  routingBudget.requestsLeft -= 1;
+  return true;
+}
+
+async function waitForOsrmRateLimit(useBrowserStorage: boolean) {
   const intervalMs = osrmMinIntervalMs();
   const now = Date.now();
+  if (useBrowserStorage) {
+    try {
+      const sharedNextRequestAt = Number(localStorage.getItem(OSRM_BROWSER_NEXT_REQUEST_KEY) ?? 0);
+      if (Number.isFinite(sharedNextRequestAt)) nextOsrmRequestAt = Math.max(nextOsrmRequestAt, sharedNextRequestAt);
+    } catch {
+      // Private browsing may make localStorage unavailable; the in-memory limiter still applies.
+    }
+  }
   const waitMs = Math.max(0, nextOsrmRequestAt - now);
   nextOsrmRequestAt = Math.max(now, nextOsrmRequestAt) + intervalMs;
+  if (useBrowserStorage) {
+    try {
+      localStorage.setItem(OSRM_BROWSER_NEXT_REQUEST_KEY, String(nextOsrmRequestAt));
+    } catch {
+      throw new Error("Cross-tab OSRM rate-limit storage is unavailable");
+    }
+  }
   if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
 }
 
@@ -181,8 +249,15 @@ export function clearRouteCache() {
   nextOsrmRequestAt = 0;
 }
 
-export function setRemoteRoutingEnabled(enabled: boolean) {
-  remoteRoutingEnabled = enabled;
+export function beginRoutingBudget(maxRequests: number, timeoutMs: number) {
+  const budget = {
+    requestsLeft: Math.max(0, Math.floor(maxRequests)),
+    deadline: Date.now() + Math.max(0, timeoutMs)
+  };
+  routingBudget = budget;
+  return () => {
+    if (routingBudget === budget) routingBudget = null;
+  };
 }
 
 export function speedForMode(mode: HighwayMode): number {
