@@ -9,12 +9,12 @@ import {
   type Spot,
   SpotSchema
 } from "../src/shared/types";
-import { approximateRoute, resolveRoute, speedForMode, type RouteResult } from "./routing";
+import { approximateRoute, isRoadRoutingEnabled, resolveRoute, speedForMode, type RouteResult } from "./routing";
 
 const spots = rawSpots.map((spot) => SpotSchema.parse(spot));
 
 const highwayLabels: Record<HighwayMode, string> = {
-  none: "高速道路なし",
+  none: "高速なし",
   full: "高速道路あり"
 };
 
@@ -210,15 +210,28 @@ async function buildPlan(
   focus: PlanFocus
 ): Promise<Plan | null> {
   const origin: LatLngTuple = [request.origin.lat, request.origin.lng];
+  const focusCandidates = candidates.filter((spot) => !isWeakDestinationSpot(spot) && isFocusSpot(spot, focus));
   const ranked = rotate(
-    candidates.filter((spot) => !isWeakDestinationSpot(spot) && isFocusSpot(spot, focus)),
+    focus === "scenic" && isRoadRoutingEnabled() ? rankAnchorsForBudget(origin, focusCandidates, request) : focusCandidates,
     planIndex
   );
   const anchor = ranked[0];
   if (!anchor) return null;
 
   const targetStops = focus === "road" ? 3 : request.tripStyle === "half_day" ? 2 : planIndex % 2 === 0 ? 2 : 3;
-  return buildPlanAroundAnchor(request, candidates, anchor.id, focus, {}, "local", targetStops);
+  return buildPlanAroundAnchor(request, candidates, anchor.id, focus, {}, "local", targetStops, 1);
+}
+
+function rankAnchorsForBudget(origin: LatLngTuple, candidates: Spot[], request: PlanRequest) {
+  if (candidates.length < 4) return candidates;
+  const targetDistance = radiusFromConstraint(request) * (request.routeOptions.highwayMode === "none" ? 0.45 : 0.65);
+  return [...candidates].sort((a, b) => {
+    const distanceDelta =
+      Math.abs(haversineKm(origin, [a.lat, a.lng]) - targetDistance) -
+      Math.abs(haversineKm(origin, [b.lat, b.lng]) - targetDistance);
+    if (Math.abs(distanceDelta) > 4) return distanceDelta;
+    return scoreSpot(b, request) - scoreSpot(a, request);
+  });
 }
 
 export async function buildPlanAroundAnchor(
@@ -228,7 +241,8 @@ export async function buildPlanAroundAnchor(
   focus: PlanFocus,
   copy: PlanCopy = {},
   source: Plan["source"] = "codex",
-  targetStops = focus === "road" ? 3 : request.tripStyle === "half_day" ? 2 : 3
+  targetStops = focus === "road" ? 3 : request.tripStyle === "half_day" ? 2 : 3,
+  maxAlternateReturnCandidates = 2
 ): Promise<Plan | null> {
   const origin: LatLngTuple = [request.origin.lat, request.origin.lng];
   const anchor = candidates.find((spot) => spot.id === anchorId);
@@ -239,7 +253,7 @@ export async function buildPlanAroundAnchor(
     pickStopsForFocus(origin, anchor, sameDirection, request, targetStops, focus)
   );
   if (!hasRequiredSupport(selected, focus)) return null;
-  return planFromStops(request, selected, copy, source, anchor.id, focus);
+  return planFromStops(request, selected, copy, source, anchor.id, focus, maxAlternateReturnCandidates);
 }
 
 async function planFromStops(
@@ -248,7 +262,8 @@ async function planFromStops(
   copy: PlanCopy = {},
   source: Plan["source"] = "local",
   preferredAnchorId?: string,
-  focus?: PlanFocus
+  focus?: PlanFocus,
+  maxAlternateReturnCandidates = 2
 ): Promise<Plan | null> {
   if (selected.length === 0) return null;
   const origin: LatLngTuple = [request.origin.lat, request.origin.lng];
@@ -261,7 +276,7 @@ async function planFromStops(
 
   while (stops.length > 0) {
     if (focus && !hasRequiredSupport(stops, focus)) return null;
-    const resolvedRoute = await resolvePlanRoute(origin, stops, request, budget);
+    const resolvedRoute = await resolvePlanRoute(origin, stops, request, budget, maxAlternateReturnCandidates);
     const route = resolvedRoute.route;
     const value = request.constraint.type === "distance" ? route.distanceKm : route.durationMin;
     if (value <= budget && isDetourAcceptable(origin, stops, request)) {
@@ -301,8 +316,8 @@ async function planFromStops(
           resolvedRoute.usedAlternateReturn
             ? "帰路は往路と重なりにくい周回ルートを選んでいます。"
             : "帰路の別ルートが成立しなかったため、往路と重なる区間があります。",
-          route.source === "osrm"
-            ? "道路形状はOSM/OSRM由来です。規制、営業時間、二輪通行可否は出発前に確認してください。"
+          route.source === "valhalla"
+            ? "道路形状はOSM/Valhalla由来です。規制、営業時間、二輪通行可否は出発前に確認してください。"
             : "ルート線は外部ルート取得失敗時の簡易目安です。実際の道路形状や規制は出発前に確認してください。",
           "スポット情報は収集済みデータ由来です。最新の営業状況や駐車場は未検証です。"
         ],
@@ -332,20 +347,24 @@ async function resolvePlanRoute(
   origin: LatLngTuple,
   stops: Spot[],
   request: PlanRequest,
-  budget: number
+  budget: number,
+  maxAlternateReturnCandidates: number
 ): Promise<{ route: RouteResult; usedAlternateReturn: boolean }> {
   const stopPoints = stops.map((spot) => [spot.lat, spot.lng] as LatLngTuple);
   const baseline = await resolveRoute([origin, ...stopPoints, origin], request.routeOptions.highwayMode);
-  if (baseline.source !== "osrm") {
+  if (baseline.source !== "valhalla") {
+    return { route: baseline, usedAlternateReturn: false };
+  }
+  if (routeValue(baseline, request) > budget) {
     return { route: baseline, usedAlternateReturn: false };
   }
 
-  const loopCandidates = loopRoutePoints(origin, stopPoints);
+  const loopCandidates = loopRoutePoints(origin, stopPoints).slice(0, maxAlternateReturnCandidates);
   const routedCandidates = await Promise.all(
     loopCandidates.map((routePoints) => resolveRoute(routePoints, request.routeOptions.highwayMode))
   );
   const validCandidates = routedCandidates
-    .filter((route) => route.source === "osrm")
+    .filter((route) => route.source === "valhalla")
     .filter(
       (route) =>
         route.maxWaypointSnapDistanceM !== undefined &&

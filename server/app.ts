@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { AppServerCodexProvider, type CodexPlanProvider } from "./codexProvider";
 import { buildPlansWithMode } from "./planService";
+import { beginRoutingBudget } from "./routing";
 import { PlanRequestSchema } from "../src/shared/types";
 
 export function createApp(options: { distPath?: string | false; codexProvider?: CodexPlanProvider } = {}) {
@@ -50,7 +51,12 @@ export function createApp(options: { distPath?: string | false; codexProvider?: 
       return;
     }
 
-    response.json(await buildPlansWithMode(parsed.data, codexProvider));
+    const finishRoutingBudget = beginRoutingBudget(12, 18_000);
+    try {
+      response.json(await buildPlansWithMode(parsed.data, codexProvider));
+    } finally {
+      finishRoutingBudget();
+    }
   });
 
   const distPath = options.distPath === false ? "" : options.distPath ?? path.resolve(process.cwd(), "dist");
@@ -60,6 +66,14 @@ export function createApp(options: { distPath?: string | false; codexProvider?: 
       response.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  app.use((error: Error, _request: express.Request, response: express.Response, next: express.NextFunction) => {
+    if (error.message === "Origin is not allowed") {
+      response.status(403).json({ error: "Origin is not allowed" });
+      return;
+    }
+    next(error);
+  });
 
   return app;
 }

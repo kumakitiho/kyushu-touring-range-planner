@@ -5,7 +5,7 @@ export type RouteResult = {
   distanceKm: number;
   durationMin: number;
   line: LatLngTuple[];
-  source: "osrm" | "fallback";
+  source: "valhalla" | "fallback";
   maxWaypointSnapDistanceM?: number;
   waypointLineIndices?: number[];
 };
@@ -38,6 +38,7 @@ const OSRM_CACHE_SUCCESS_TTL_MS = 5 * 60 * 1000;
 const OSRM_CACHE_FAILURE_TTL_MS = 15 * 1000;
 const OSRM_BROWSER_LOCK_NAME = "kyushu-touring-osrm-demo";
 const OSRM_BROWSER_NEXT_REQUEST_KEY = "kyushu-touring-osrm-next-request-at";
+const PUBLIC_VALHALLA_BASE_URL = "https://valhalla1.openstreetmap.de";
 const osrmCache = new Map<string, OsrmCacheEntry>();
 let activeOsrmRequests = 0;
 let nextOsrmRequestAt = 0;
@@ -46,7 +47,7 @@ const osrmQueue: Array<() => void> = [];
 
 export async function resolveRoute(points: LatLngTuple[], mode: HighwayMode): Promise<RouteResult> {
   if (points.length < 2) return approximateRoute(points, mode);
-  const routed = await fetchOsrmRoute(points);
+  const routed = await fetchOsrmRoute(points, mode);
   return routed ?? approximateRoute(points, mode);
 }
 
@@ -60,12 +61,28 @@ export function approximateRoute(points: LatLngTuple[], mode: HighwayMode): Rout
   };
 }
 
-async function fetchOsrmRoute(points: LatLngTuple[]): Promise<RouteResult | null> {
-  const baseUrl = environmentValue("OSRM_BASE_URL") || "https://router.project-osrm.org";
+async function fetchOsrmRoute(points: LatLngTuple[], mode: HighwayMode): Promise<RouteResult | null> {
+  const legacyRoutingSetting = environmentValue("OSRM_BASE_URL");
+  // Runtime environment values are available to the Node server, but are not exposed by the Vite browser build.
+  const baseUrl = environmentValue("VALHALLA_BASE_URL") || (legacyRoutingSetting === "off" ? "off" : PUBLIC_VALHALLA_BASE_URL);
   if (baseUrl === "off") return null;
   if (isBrowserPublicDemo(baseUrl) && !canCoordinateBrowserRequests()) return null;
-  const coordinates = points.map(([lat, lng]) => `${lng},${lat}`).join(";");
-  const url = `${baseUrl.replace(/\/$/, "")}/route/v1/driving/${coordinates}?overview=full&geometries=geojson&steps=false`;
+  const routeRequest = {
+    locations: points.map(([lat, lng]) => ({ lat, lon: lng })),
+    costing: "motorcycle",
+    costing_options: {
+      motorcycle: {
+        use_highways: mode === "full" ? 1 : 0.5,
+        use_tolls: mode === "full" ? 1 : 0,
+        exclude_tolls: mode === "none"
+      }
+    },
+    units: "kilometers",
+    format: "osrm",
+    shape_format: "geojson",
+    directions_type: "none"
+  };
+  const url = `${baseUrl.replace(/\/$/, "")}/route?json=${encodeURIComponent(JSON.stringify(routeRequest))}`;
   const now = Date.now();
   const cached = osrmCache.get(url);
   if (cached && cached.expiresAt > now) return cached.request;
@@ -92,7 +109,7 @@ async function fetchOsrmRoute(points: LatLngTuple[]): Promise<RouteResult | null
           distanceKm: route.distance / 1000,
           durationMin: route.duration / 60,
           line,
-          source: "osrm" as const,
+          source: "valhalla" as const,
           maxWaypointSnapDistanceM: data.waypoints?.length
             ? Math.max(...data.waypoints.map((waypoint) => waypoint.distance))
             : undefined,
@@ -175,7 +192,7 @@ async function runWithOsrmRateLimit<T>(task: () => Promise<T>): Promise<T> {
 }
 
 function isBrowserPublicDemo(baseUrl: string) {
-  return typeof window !== "undefined" && baseUrl.replace(/\/$/, "") === "https://router.project-osrm.org";
+  return typeof window !== "undefined" && baseUrl.replace(/\/$/, "") === PUBLIC_VALHALLA_BASE_URL;
 }
 
 function canCoordinateBrowserRequests() {
@@ -247,6 +264,10 @@ function trimRouteCache() {
 export function clearRouteCache() {
   osrmCache.clear();
   nextOsrmRequestAt = 0;
+}
+
+export function isRoadRoutingEnabled() {
+  return environmentValue("VALHALLA_BASE_URL") !== "off" && environmentValue("OSRM_BASE_URL") !== "off";
 }
 
 export function beginRoutingBudget(maxRequests: number, timeoutMs: number) {

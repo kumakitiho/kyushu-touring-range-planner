@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { circlePolygon } from "./lib/geo";
+import { probeCodexBackend, type CodexBackendStatus } from "./lib/codexCapability";
 import { requestPlans } from "./lib/planClient";
 import { routeAtProgress, routeHead } from "./lib/routeAnimation";
 import type { GenerationMode, HighwayMode, Plan, PlanRequest, PlanResponse, PlanStop, PreferenceLevel, Spot } from "./shared/types";
@@ -21,13 +22,7 @@ import type { GenerationMode, HighwayMode, Plan, PlanRequest, PlanResponse, Plan
 type SheetView = "setup" | "plans" | "detail";
 type GeoState = "idle" | "requesting" | "granted" | "denied" | "unavailable" | "timeout" | "low_accuracy";
 type SheetMode = "peek" | "mid" | "full";
-type CodexStatus = {
-  codexAvailable: boolean;
-  authMode: string | null;
-  planType: string | null;
-  loginState?: string;
-  message?: string;
-};
+type CodexStatus = CodexBackendStatus;
 type CodexLoginStart = {
   type: "chatgptDeviceCode" | "chatgpt" | "unavailable";
   loginId?: string;
@@ -57,7 +52,7 @@ const defaultPreferences: PlanRequest["preferences"] = {
 };
 
 const highwayOptions: Array<{ value: HighwayMode; label: string; hint: string }> = [
-  { value: "none", label: "下道のみ", hint: "近場を中心に組む" },
+  { value: "none", label: "高速なし", hint: "有料道路を避ける" },
   { value: "full", label: "高速あり", hint: "遠方候補も含める" }
 ];
 
@@ -83,6 +78,7 @@ export function App() {
   const [tripStyle, setTripStyle] = useState<"half_day" | "day_trip">("day_trip");
   const [generationMode, setGenerationMode] = useState<GenerationMode>("auto");
   const [codexStatus, setCodexStatus] = useState<CodexStatus | null>(null);
+  const [codexBackendAvailable, setCodexBackendAvailable] = useState<boolean | null>(null);
   const [codexLogin, setCodexLogin] = useState<CodexLoginStart | null>(null);
   const [isCodexLoginLoading, setIsCodexLoginLoading] = useState(false);
   const [planResponse, setPlanResponse] = useState<PlanResponse | null>(null);
@@ -104,12 +100,48 @@ export function App() {
   const headMarkerRef = useRef<CircleMarker | null>(null);
   const spotMarkerRefs = useRef<Map<string, CircleMarker>>(new Map());
   const animationRef = useRef<number | null>(null);
+  const planResponseRef = useRef<PlanResponse | null>(null);
+  const sheetDragMovedRef = useRef(false);
   const startedAtRef = useRef<number>(0);
   const routeProgressRef = useRef(1);
   const fittedPlanKeyRef = useRef<string>("");
 
   const selectedPlan = planResponse?.plans[selectedPlanIndex] ?? null;
   const activeSpotId = selectedSpot?.spotId ?? selectedPlan?.stops[0]?.spotId ?? null;
+
+  function invalidateGeneratedPlans() {
+    const hadPlan = Boolean(planResponseRef.current);
+    planResponseRef.current = null;
+    setPlanResponse(null);
+    setSelectedPlanIndex(0);
+    setSelectedSpot(null);
+    setSheetView("setup");
+    setIsPlaying(false);
+    routeProgressRef.current = 1;
+    fittedPlanKeyRef.current = "";
+    if (hadPlan) setMessage("条件が変わりました。ルートを再提案してください。");
+  }
+
+  function changeOrigin(nextOrigin: Origin) {
+    invalidateGeneratedPlans();
+    setOrigin(nextOrigin);
+  }
+
+  useEffect(() => {
+    let active = true;
+    void probeCodexBackend().then((status) => {
+      if (!active) return;
+      setCodexBackendAvailable(status !== null);
+      if (status) {
+        setCodexStatus(status);
+      } else {
+        setGenerationMode("local");
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isLoading) {
@@ -145,7 +177,7 @@ export function App() {
         lng: Number(event.latlng.lng.toFixed(6)),
         source: "manual" as const
       };
-      setOrigin(nextOrigin);
+      changeOrigin(nextOrigin);
       setMessage("地図タップで出発地点を更新しました。");
     });
 
@@ -212,13 +244,14 @@ export function App() {
 
     if (activeSpotId) spotMarkerRefs.current.get(activeSpotId)?.openPopup();
 
-    if (selectedPlan?.routeLine.length && fittedPlanKeyRef.current !== planKey(selectedPlan)) {
+    const fitKey = selectedPlan ? mapFitKey(selectedPlan, sheetMode) : "";
+    if (selectedPlan?.routeLine.length && fittedPlanKeyRef.current !== fitKey) {
       map.fitBounds(L.latLngBounds(selectedPlan.routeLine as LatLngExpression[]), {
         paddingTopLeft: [32, 72],
         paddingBottomRight: [32, sheetMode === "full" ? 500 : 330],
         maxZoom: 10
       });
-      fittedPlanKeyRef.current = planKey(selectedPlan);
+      fittedPlanKeyRef.current = fitKey;
     }
   }, [origin, planResponse, selectedPlan, sheetMode, activeSpotId, constraintType, constraintValue, highwayMode, tripStyle, preferences.relaxed]);
 
@@ -344,6 +377,7 @@ export function App() {
 
     try {
       const data = await requestPlans(request);
+      planResponseRef.current = data;
       setPlanResponse(data);
       setSelectedPlanIndex(0);
       setSelectedSpot(data.plans[0]?.stops[0] ?? null);
@@ -362,13 +396,15 @@ export function App() {
   }
 
   async function refreshCodexStatus(showMessage = true) {
-    try {
-      const response = await fetch("/api/codex/status");
-      const data = (await response.json()) as CodexStatus;
+    const data = await probeCodexBackend();
+    if (data) {
+      setCodexBackendAvailable(true);
       setCodexStatus(data);
       if (showMessage) setMessage(statusMessage(data));
-    } catch {
+    } else {
       const unavailable = { codexAvailable: false, authMode: null, planType: null, message: "高精度提案の状態を確認できませんでした。" };
+      setCodexBackendAvailable(false);
+      setGenerationMode("local");
       setCodexStatus(unavailable);
       if (showMessage) setMessage(unavailable.message);
     }
@@ -403,7 +439,7 @@ export function App() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const accuracy = position.coords.accuracy;
-        setOrigin({
+        changeOrigin({
           label: accuracy > 1000 ? "現在地付近" : "現在地",
           lat: Number(position.coords.latitude.toFixed(6)),
           lng: Number(position.coords.longitude.toFixed(6)),
@@ -444,8 +480,10 @@ export function App() {
   function startSheetDrag(event: React.PointerEvent<HTMLButtonElement>) {
     const startY = event.clientY;
     const startMode = sheetMode;
+    sheetDragMovedRef.current = false;
     const onMove = (moveEvent: PointerEvent) => {
       const delta = moveEvent.clientY - startY;
+      if (shouldSuppressSheetClick(delta)) sheetDragMovedRef.current = true;
       if (delta < -70) setSheetMode("full");
       if (delta > 70) setSheetMode(startMode === "full" ? "mid" : "peek");
     };
@@ -463,7 +501,8 @@ export function App() {
     message.includes("失敗") ||
     message.includes("できません") ||
     message.includes("ログイン") ||
-    message.includes("地図上") ||
+    (message.includes("地図上") || message.includes("地図タップ")) ||
+    message.includes("条件が変わりました") ||
     message.includes("登録スポット");
 
   return (
@@ -480,7 +519,17 @@ export function App() {
       </section>
 
       <section className={`bottom-sheet ${sheetMode}`} aria-label="プラン操作パネル">
-        <button className="sheet-handle" onPointerDown={startSheetDrag} onClick={() => setSheetMode(sheetMode === "full" ? "mid" : "full")}>
+        <button
+          className="sheet-handle"
+          onPointerDown={startSheetDrag}
+          onClick={() => {
+            if (sheetDragMovedRef.current) {
+              sheetDragMovedRef.current = false;
+              return;
+            }
+            setSheetMode(sheetMode === "full" ? "mid" : "full");
+          }}
+        >
           <span />
           <ChevronDown size={18} />
         </button>
@@ -503,6 +552,7 @@ export function App() {
                 候補
               </button>
             )}
+            <SheetCollapseButton mode={sheetMode} onCollapse={() => setSheetMode("mid")} />
           </div>
         </div>
         {shouldShowStatus && (
@@ -523,19 +573,38 @@ export function App() {
               tripStyle={tripStyle}
               generationMode={generationMode}
               codexStatus={codexStatus}
+              codexBackendAvailable={codexBackendAvailable}
               codexLogin={codexLogin}
               onUseCurrentLocation={useCurrentLocation}
               onPickOriginOnMap={() => {
                 setSheetMode("peek");
                 setMessage("地図上の出発地点をタップしてください。");
               }}
-              onOriginChange={setOrigin}
-              onConstraintTypeChange={setConstraintType}
-              onConstraintValueChange={setConstraintValue}
-              onHighwayModeChange={setHighwayMode}
-              onPreferencesChange={setPreferences}
-              onTripStyleChange={setTripStyle}
-              onGenerationModeChange={setGenerationMode}
+              onOriginChange={changeOrigin}
+              onConstraintTypeChange={(type) => {
+                invalidateGeneratedPlans();
+                setConstraintType(type);
+              }}
+              onConstraintValueChange={(value) => {
+                invalidateGeneratedPlans();
+                setConstraintValue(value);
+              }}
+              onHighwayModeChange={(mode) => {
+                invalidateGeneratedPlans();
+                setHighwayMode(mode);
+              }}
+              onPreferencesChange={(nextPreferences) => {
+                invalidateGeneratedPlans();
+                setPreferences(nextPreferences);
+              }}
+              onTripStyleChange={(style) => {
+                invalidateGeneratedPlans();
+                setTripStyle(style);
+              }}
+              onGenerationModeChange={(mode) => {
+                invalidateGeneratedPlans();
+                setGenerationMode(mode);
+              }}
               onStartCodexLogin={startCodexLogin}
               onRefreshCodexStatus={() => refreshCodexStatus(true)}
               isCodexLoginLoading={isCodexLoginLoading}
@@ -564,7 +633,30 @@ export function App() {
   );
 }
 
-function InputPanel(props: {
+export function SheetCollapseButton(props: { mode: SheetMode; onCollapse: () => void }) {
+  if (props.mode !== "full") return null;
+  return (
+    <button
+      className="sheet-collapse-button"
+      onClick={props.onCollapse}
+      type="button"
+      aria-label="シートを縮める"
+      title="シートを縮める"
+    >
+      <ChevronDown size={20} />
+    </button>
+  );
+}
+
+export function shouldSuppressSheetClick(deltaY: number) {
+  return Math.abs(deltaY) > 8;
+}
+
+export function mapFitKey(plan: Plan, mode: SheetMode) {
+  return `${planKey(plan)}:${mode}`;
+}
+
+export function InputPanel(props: {
   origin: Origin;
   geoState: GeoState;
   constraintType: "distance" | "duration";
@@ -574,6 +666,7 @@ function InputPanel(props: {
   tripStyle: "half_day" | "day_trip";
   generationMode: GenerationMode;
   codexStatus: CodexStatus | null;
+  codexBackendAvailable: boolean | null;
   codexLogin: CodexLoginStart | null;
   onUseCurrentLocation: () => void;
   onPickOriginOnMap: () => void;
@@ -596,9 +689,9 @@ function InputPanel(props: {
         本アプリは現在地を保存しません。地図表示では
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
         へ、道路ルートの計算では
-        <a href="https://project-osrm.org/" target="_blank" rel="noreferrer">OSRM</a>
+        <a href="https://valhalla.github.io/valhalla/" target="_blank" rel="noreferrer">Valhalla</a>
         へ座標が送信され、運営側のログに保存される場合があります。
-        <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noreferrer">プライバシー・利用条件</a>
+        <a href="https://www.fossgis.de/datenschutzerklaerung/" target="_blank" rel="noreferrer">プライバシー・利用条件</a>
         <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noreferrer">地図の誤りを報告</a>
         <a href="mailto:s.kuma100ten@gmail.com">s.kuma100ten@gmail.com</a>
       </aside>
@@ -741,34 +834,42 @@ function InputPanel(props: {
               <Bot size={18} />
               <h2>提案方法</h2>
             </div>
-            <div className="segmented generation-grid">
-              {generationOptions.map((option) => (
-                <button
-                  key={option.value}
-                  className={props.generationMode === option.value ? "active" : ""}
-                  onClick={() => props.onGenerationModeChange(option.value)}
-                  type="button"
-                >
-                  <strong>{generationLabel(option.value)}</strong>
-                  <span>{option.hint}</span>
-                </button>
-              ))}
-            </div>
-            <div className="codex-card">
-              <div>
-                <strong>{codexStatusLabel(props.codexStatus)}</strong>
-                <span>{codexStatusDetail(props.codexStatus)}</span>
-              </div>
-              <div className="codex-actions">
-                <button className="small-button" onClick={props.onRefreshCodexStatus} type="button">
-                  更新
-                </button>
-                <button className="small-button primary" onClick={props.onStartCodexLogin} disabled={props.isCodexLoginLoading} type="button">
-                  {props.isCodexLoginLoading ? "開始中" : "ログイン"}
-                </button>
-              </div>
-            </div>
-            {props.codexLogin?.type === "chatgptDeviceCode" && (
+            {props.codexBackendAvailable === false ? (
+              <p className="local-proposal-note">公開版では登録済みスポットから提案します。</p>
+            ) : props.codexBackendAvailable === true ? (
+              <>
+                <div className="segmented generation-grid">
+                  {generationOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      className={props.generationMode === option.value ? "active" : ""}
+                      onClick={() => props.onGenerationModeChange(option.value)}
+                      type="button"
+                    >
+                      <strong>{generationLabel(option.value)}</strong>
+                      <span>{option.hint}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="codex-card">
+                  <div>
+                    <strong>{codexStatusLabel(props.codexStatus)}</strong>
+                    <span>{codexStatusDetail(props.codexStatus)}</span>
+                  </div>
+                  <div className="codex-actions">
+                    <button className="small-button" onClick={props.onRefreshCodexStatus} type="button">
+                      更新
+                    </button>
+                    <button className="small-button primary" onClick={props.onStartCodexLogin} disabled={props.isCodexLoginLoading} type="button">
+                      {props.isCodexLoginLoading ? "開始中" : "ログイン"}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="local-proposal-note">提案方法を確認しています。</p>
+            )}
+            {props.codexBackendAvailable === true && props.codexLogin?.type === "chatgptDeviceCode" && (
               <div className="login-card">
                 <span>以下のURLでコードを入力</span>
                 <a href={props.codexLogin.verificationUrl} target="_blank" rel="noreferrer">
@@ -777,7 +878,7 @@ function InputPanel(props: {
                 <strong>{props.codexLogin.userCode}</strong>
               </div>
             )}
-            {props.codexLogin?.type === "chatgpt" && (
+            {props.codexBackendAvailable === true && props.codexLogin?.type === "chatgpt" && (
               <div className="login-card">
                 <span>ブラウザでChatGPTログイン</span>
                 <a href={props.codexLogin.authUrl} target="_blank" rel="noreferrer">
@@ -814,7 +915,7 @@ function PreferenceSegment(props: {
   );
 }
 
-function PlanList(props: {
+export function PlanList(props: {
   response: PlanResponse | null;
   selectedIndex: number;
   onSelectPlan: (plan: Plan, index: number) => void;
@@ -844,7 +945,7 @@ function PlanList(props: {
         <strong>{props.response.plans.length}つの候補</strong>
         <span>{props.response.fallbackReason ? "登録スポットから候補を整えました" : "地図上のルートと合わせて選べます"}</span>
       </div>
-      {props.response.fallbackReason && (
+      {props.response.fallbackReason && props.response.providerStatus?.codexAvailable !== false && (
         <details className="plan-diagnostic">
           <summary>提案メモ</summary>
           <p>高精度提案の結果が使えなかったため、登録データから提案しました。</p>
@@ -882,7 +983,7 @@ function PlanList(props: {
   );
 }
 
-function PlanItinerary(props: { plan: Plan | null; selectedSpot: PlanStop | null; onSelectSpot: (spot: PlanStop) => void }) {
+export function PlanItinerary(props: { plan: Plan | null; selectedSpot: PlanStop | null; onSelectSpot: (spot: PlanStop) => void }) {
   if (!props.plan) {
     return (
       <div className="empty-state">
@@ -993,7 +1094,7 @@ function planComparisonTags(plan: Plan) {
   return tags.slice(0, 4);
 }
 
-function spotPopupHtml(spot: Spot) {
+export function spotPopupHtml(spot: Spot) {
   const image = spot.images[0];
   const imageHtml = image
     ? `<img class="map-popup-image" src="${escapeHtml(image.url)}" alt="${escapeHtml(image.alt || spot.name)}" loading="lazy" />`

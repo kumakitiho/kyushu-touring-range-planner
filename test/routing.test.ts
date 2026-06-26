@@ -4,7 +4,7 @@ import { beginRoutingBudget, clearRouteCache, resolveRoute } from "../server/rou
 describe("routing", () => {
   beforeEach(() => {
     clearRouteCache();
-    vi.stubEnv("OSRM_BASE_URL", "http://mock-osrm");
+    vi.stubEnv("VALHALLA_BASE_URL", "http://mock-valhalla");
     vi.stubEnv("OSRM_MIN_INTERVAL_MS", "0");
   });
 
@@ -46,6 +46,52 @@ describe("routing", () => {
     await resolveRoute(points, "none");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks Valhalla motorcycle routing to avoid highways when highway use is off", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify({ code: "NoRoute", routes: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const points: [number, number][] = [
+      [33.59, 130.4],
+      [33.6, 130.5]
+    ];
+
+    await resolveRoute(points, "none");
+
+    const requestUrl = new URL(String(fetchMock.mock.calls[0][0]));
+    const routeRequest = JSON.parse(requestUrl.searchParams.get("json")!);
+    expect(routeRequest).toMatchObject({
+      costing: "motorcycle",
+      costing_options: { motorcycle: { use_highways: 0.5, use_tolls: 0, exclude_tolls: true } },
+      format: "osrm",
+      shape_format: "geojson",
+      directions_type: "none"
+    });
+  });
+
+  it("asks Valhalla motorcycle routing to prefer highways when highway use is on", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify({ code: "NoRoute", routes: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const points: [number, number][] = [
+      [33.59, 130.4],
+      [33.6, 130.5]
+    ];
+
+    await resolveRoute(points, "full");
+
+    const requestUrl = new URL(String(fetchMock.mock.calls[0][0]));
+    const routeRequest = JSON.parse(requestUrl.searchParams.get("json")!);
+    expect(routeRequest.costing_options.motorcycle).toEqual({ use_highways: 1, use_tolls: 1, exclude_tolls: false });
   });
 
   it("serializes public OSRM requests with a minimum interval", async () => {

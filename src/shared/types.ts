@@ -89,7 +89,7 @@ export const PlanSchema = z.object({
   estimatedDistanceKm: z.number(),
   estimatedDurationMin: z.number(),
   highwayUsage: z.string(),
-  routeSource: z.enum(["osrm", "fallback"]),
+  routeSource: z.enum(["valhalla", "fallback"]),
   routeLine: z.array(z.tuple([z.number(), z.number()])),
   highlights: z.array(z.string()),
   cautions: z.array(z.string()),

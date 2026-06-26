@@ -48,7 +48,7 @@ describe("requestPlans", () => {
     expect(response.fallbackReason).toContain("端末の登録スポット");
     expect(response.providerStatus?.codexAvailable).toBe(false);
     expect(remoteFetch).toHaveBeenCalled();
-    expect(response.plans.some((plan) => plan.routeSource === "osrm")).toBe(true);
+    expect(response.plans.some((plan) => plan.routeSource === "valhalla")).toBe(true);
   });
 
   it("uses approximate routes when cross-tab coordination is unavailable", async () => {

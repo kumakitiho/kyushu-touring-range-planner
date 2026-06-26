@@ -48,7 +48,7 @@ const famousGourmetIds = new Set([
 describe("planner fallback", () => {
   beforeEach(() => {
     clearRouteCache();
-    vi.stubEnv("OSRM_BASE_URL", "off");
+    vi.stubEnv("VALHALLA_BASE_URL", "off");
     vi.stubEnv("OSRM_MIN_INTERVAL_MS", "0");
   });
 
@@ -266,7 +266,7 @@ describe("planner fallback", () => {
   });
 
   it("does not keep a single stop when resolved OSRM duration exceeds the budget", async () => {
-    vi.stubEnv("OSRM_BASE_URL", "http://mock-osrm");
+    vi.stubEnv("VALHALLA_BASE_URL", "http://mock-valhalla");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
@@ -387,7 +387,7 @@ describe("planner fallback", () => {
   });
 
   it("compares both return directions and chooses the shorter practical road loop", async () => {
-    vi.stubEnv("OSRM_BASE_URL", "http://mock-osrm");
+    vi.stubEnv("VALHALLA_BASE_URL", "http://mock-valhalla");
     let requestIndex = 0;
     const requestedUrls: string[] = [];
     vi.stubGlobal(
@@ -413,7 +413,7 @@ describe("planner fallback", () => {
       ["waterfall-q34683319"]
     );
 
-    expect(plan?.routeSource).toBe("osrm");
+    expect(plan?.routeSource).toBe("valhalla");
     expect(plan?.estimatedDurationMin).toBe(90);
     expect(plan?.routeLine).toHaveLength(4);
     expect(plan?.cautions.some((caution) => caution.includes("周回ルート"))).toBe(true);
@@ -422,7 +422,7 @@ describe("planner fallback", () => {
   });
 
   it("rejects alternate return routes that detour more than thirty percent", async () => {
-    vi.stubEnv("OSRM_BASE_URL", "http://mock-osrm");
+    vi.stubEnv("VALHALLA_BASE_URL", "http://mock-valhalla");
     let requestIndex = 0;
     vi.stubGlobal(
       "fetch",
@@ -453,7 +453,7 @@ describe("planner fallback", () => {
   });
 
   it("rejects a nominal loop when its routed return mostly overlaps the outbound road", async () => {
-    vi.stubEnv("OSRM_BASE_URL", "http://mock-osrm");
+    vi.stubEnv("VALHALLA_BASE_URL", "http://mock-valhalla");
     const denseGeometry = denseOutAndBackCoordinates(fukuokaOrigin, ogiWaterfall);
     vi.stubGlobal(
       "fetch",
@@ -478,7 +478,7 @@ describe("planner fallback", () => {
   });
 
   it("rejects a loop whose waypoint is snapped more than two kilometers", async () => {
-    vi.stubEnv("OSRM_BASE_URL", "http://mock-osrm");
+    vi.stubEnv("VALHALLA_BASE_URL", "http://mock-valhalla");
     let requestIndex = 0;
     vi.stubGlobal(
       "fetch",

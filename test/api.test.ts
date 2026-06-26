@@ -9,7 +9,7 @@ import { PlanResponseSchema, type Spot } from "../src/shared/types";
 
 describe("plans api", () => {
   beforeEach(() => {
-    vi.stubEnv("OSRM_BASE_URL", "off");
+    vi.stubEnv("VALHALLA_BASE_URL", "off");
   });
 
   afterEach(() => {
@@ -368,6 +368,50 @@ describe("plans api", () => {
     } finally {
       rmSync(distPath, { recursive: true, force: true });
     }
+  });
+
+  it("healthとCodex statusをJSONで返す", async () => {
+    const provider = mockProvider({
+      getStatus: vi.fn(async () => ({ codexAvailable: true, authMode: "chatgpt", planType: "plus" }))
+    });
+    const app = createApp({ distPath: false, codexProvider: provider });
+
+    const health = await request(app).get("/api/health").expect(200);
+    const status = await request(app).get("/api/codex/status").expect(200);
+
+    expect(health.body).toMatchObject({ ok: true, providers: { codexAppServer: true } });
+    expect(status.body).toMatchObject({ codexAvailable: true, authMode: "chatgpt", planType: "plus" });
+  });
+
+  it("許可したローカルOriginだけをCORSで通す", async () => {
+    const app = createApp({ distPath: false, codexProvider: mockProvider() });
+
+    const allowed = await request(app).get("/api/health").set("Origin", "http://127.0.0.1:5173").expect(200);
+    const denied = await request(app).get("/api/health").set("Origin", "https://evil.example").expect(403);
+
+    expect(allowed.headers["access-control-allow-origin"]).toBe("http://127.0.0.1:5173");
+    expect(denied.headers["access-control-allow-origin"]).toBeUndefined();
+    expect(denied.body.error).toBe("Origin is not allowed");
+  });
+
+  it("1MBを超えるJSON本文を拒否する", async () => {
+    const oversized = { padding: "x".repeat(1024 * 1024 + 1) };
+
+    await request(createApp({ distPath: false, codexProvider: mockProvider() }))
+      .post("/api/plans")
+      .send(oversized)
+      .expect(413);
+  });
+
+  it("設定件数を超えるplan生成要求を429で拒否する", async () => {
+    vi.stubEnv("PLAN_RATE_LIMIT_PER_MINUTE", "2");
+    const app = createApp({ distPath: false, codexProvider: mockProvider() });
+
+    await request(app).post("/api/plans").send({}).expect(400);
+    await request(app).post("/api/plans").send({}).expect(400);
+    const limited = await request(app).post("/api/plans").send({}).expect(429);
+
+    expect(limited.body.error).toContain("Too many plan requests");
   });
 });
 

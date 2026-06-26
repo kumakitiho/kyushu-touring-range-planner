@@ -272,6 +272,25 @@ button {
   font-weight: 900;
 }
 
+.journey-actions .sheet-collapse-button {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.local-proposal-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #334155;
+  background: #f1f5f9;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .tabs {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -359,7 +378,7 @@ button {
 }
 
 .locate-chip {
-  min-height: 38px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1160,6 +1179,10 @@ button {
   }
 
   .sheet-handle {
+    display: none;
+  }
+
+  .sheet-collapse-button {
     display: none;
   }
 
