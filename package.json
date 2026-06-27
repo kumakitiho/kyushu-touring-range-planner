@@ -11,7 +11,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "start": "tsx server/index.ts",
     "test": "vitest run",
-    "spots:images": "node scripts/enrich-spot-images.mjs"
+    "spots:images": "node scripts/enrich-spot-images.mjs",
+    "candidate-limit": "node scripts/set-candidate-limit.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
