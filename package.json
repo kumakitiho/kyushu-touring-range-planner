@@ -4,13 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"npm:dev:api\" \"npm:dev:web\"",
+    "dev": "npm run candidate-limit && concurrently -k \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch server/index.ts",
     "dev:web": "vite --host 127.0.0.1",
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "npm run candidate-limit && tsc -p tsconfig.json && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "start": "tsx server/index.ts",
-    "test": "vitest run",
+    "start": "npm run candidate-limit && tsx server/index.ts",
+    "test": "npm run candidate-limit && vitest run",
     "spots:images": "node scripts/enrich-spot-images.mjs",
     "candidate-limit": "node scripts/set-candidate-limit.mjs"
   },
