@@ -4,15 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm run candidate-limit && concurrently -k \"npm:dev:api\" \"npm:dev:web\"",
+    "prepare-spots": "npm run candidate-limit && node scripts/apply-weekly-gourmet-spots.mjs",
+    "dev": "npm run prepare-spots && concurrently -k \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch server/index.ts",
     "dev:web": "vite --host 127.0.0.1",
-    "build": "npm run candidate-limit && tsc -p tsconfig.json && vite build",
+    "build": "npm run prepare-spots && tsc -p tsconfig.json && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "start": "npm run candidate-limit && tsx server/index.ts",
-    "test": "npm run candidate-limit && vitest run",
+    "start": "npm run prepare-spots && tsx server/index.ts",
+    "test": "npm run prepare-spots && vitest run",
     "spots:images": "node scripts/enrich-spot-images.mjs",
-    "candidate-limit": "node scripts/set-candidate-limit.mjs"
+    "candidate-limit": "node scripts/set-candidate-limit.mjs",
+    "spots:weekly-gourmet": "node scripts/apply-weekly-gourmet-spots.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -35,7 +37,6 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@types/supertest": "^6.0.3",
-    "@vitejs/plugin-react": "^5.1.1",
     "concurrently": "^9.2.0",
     "jsdom": "^27.3.0",
     "supertest": "^7.1.4",
