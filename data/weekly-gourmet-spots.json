@@ -1,0 +1,48 @@
+[
+  {
+    "id": "gourmet-beppu-charlies-lanai",
+    "name": "Charlie's Lanai",
+    "category": "gourmet",
+    "lat": 33.3169,
+    "lng": 131.4412,
+    "area": "大分県",
+    "tags": ["cafe", "別府", "明礬温泉", "地獄蒸し", "new", "touring"],
+    "description": "岡本屋売店の姉妹店として明礬温泉近くに開いた地獄蒸しハワイアンカフェ。温泉卵のエッグベネディクトやポケ丼、岡本屋名物の地獄蒸しプリンも楽しめ、別府湾を望む明礬温泉方面の休憩目的地に向く。",
+    "images": [],
+    "sources": [
+      "https://jigoku-prin.com/"
+    ],
+    "researchNote": "公式サイトで新規オープン告知、メニュー、住所、営業時間を確認。既存データには同名なし。岡本屋売店・地獄蒸し工房鉄輪とは別スポットとして扱う。"
+  },
+  {
+    "id": "gourmet-beppu-okamotoya-purin",
+    "name": "岡本屋売店の地獄蒸しプリン",
+    "category": "gourmet",
+    "lat": 33.3183,
+    "lng": 131.4437,
+    "area": "大分県",
+    "tags": ["地獄蒸しプリン", "別府", "明礬温泉", "大分名物", "famous", "touring"],
+    "description": "明礬温泉の湯けむりと別府湾の眺めを合わせて楽しめる地獄蒸しプリンの定番。駐車場混雑の案内が出るほど目的地性が高く、別府・やまなみ方面の甘味休憩に向く。",
+    "images": [],
+    "sources": [
+      "https://jigoku-prin.com/"
+    ],
+    "researchNote": "公式サイトで営業継続、住所、営業時間、駐車場注意喚起を確認。既存データには地獄蒸し工房鉄輪はあるが、岡本屋売店は未登録のため重複なしと判定。"
+  },
+  {
+    "id": "gourmet-kirishima-kakuida-restaurant",
+    "name": "黒酢の郷 桷志田",
+    "category": "gourmet",
+    "lat": 31.7292,
+    "lng": 130.7942,
+    "area": "鹿児島県",
+    "tags": ["黒酢", "霧島", "壷畑", "鹿児島名物", "restaurant", "touring"],
+    "description": "壷畑見学・黒酢レストラン・直売を組み合わせた黒酢の郷。桜島を望む客席や壷畑見学があり、霧島・福山方面を走る日の食事兼見学スポットにしやすい。",
+    "images": [],
+    "sources": [
+      "https://www.kakuida.com/",
+      "https://kurozurestaurant.com/"
+    ],
+    "researchNote": "公式サイトで日本初の黒酢レストラン、壷畑見学、2026年6月・7月のお知らせ、住所、営業時間を確認。既存データには同名なし。"
+  }
+]
