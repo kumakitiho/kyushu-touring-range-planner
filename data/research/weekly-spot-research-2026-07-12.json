@@ -1,0 +1,73 @@
+{
+  "researchedAt": "2026-07-12",
+  "accepted": [
+    {
+      "id": "gourmet-arita-cafe-useum",
+      "name": "CAFE USEUM ARITA",
+      "area": "佐賀県",
+      "result": "added-to-weekly-gourmet",
+      "duplicateCheck": "data/kyushu-spots.json と data/weekly-gourmet-spots.json を名称・有田エリア・カテゴリで確認し、同名および九州陶磁文化館の既存登録なし。取り込み時にも同一ID・正規化名称・同県同カテゴリ150m以内の近接重複を自動判定する。",
+      "sources": [
+        "https://saga-museum.jp/ceramic/news/2026/02/004885.html",
+        "https://saga-museum.jp/ceramic/access/parking.html",
+        "https://saga.goguynet.jp/2026/02/14/sagakennishimatsuuragunaritacho/"
+      ]
+    }
+  ],
+  "notAdded": [
+    {
+      "name": "and+NEORA",
+      "area": "福岡県福津市",
+      "result": "hold",
+      "reason": "2026年6月27日の開店と地元野菜のサンドイッチ・スムージーは地域メディアで確認できたが、正確な所在地・緯度経度と営業継続を一次情報で独立確認できなかったため未登録。",
+      "sources": [
+        "https://munakata-fukutsu-koga.goguynet.jp/2026/07/05/andneora-newopen-miyajidakejinja/"
+      ]
+    },
+    {
+      "name": "ぽっくる農園",
+      "area": "宮崎県宮崎市",
+      "result": "hold",
+      "reason": "農園直売・飲食を組み合わせた目的地性は地域メディアで確認したが、最新の公式営業情報と正確な緯度経度の照合が完了しなかったため未登録。",
+      "sources": [
+        "https://miyazaki.goguynet.jp/2025/03/18/pocklefarm/"
+      ]
+    },
+    {
+      "name": "ドライブイン小浜",
+      "area": "鹿児島県霧島市",
+      "result": "rejected",
+      "reason": "2026年6月14日に閉店したことを確認したため登録対象外。",
+      "sources": [
+        "https://kirishima-aira.goguynet.jp/category/cat_openclose/"
+      ]
+    }
+  ],
+  "classicBacklog": [
+    {
+      "status": "proposal-only",
+      "duplicateCheck": "data/kyushu-spots.json の名称検索では宮地嶽神社の既存登録なし。定番神社枠として週次グルメとは分離し、駐車場・公式アクセスの最終確認後に一括登録候補とする。",
+      "spot": {
+        "id": "shrine-miyajidake-jinja",
+        "name": "宮地嶽神社",
+        "category": "scenic",
+        "lat": 33.77972,
+        "lng": 130.48611,
+        "area": "福岡県",
+        "tags": [
+          "shrine",
+          "福岡県",
+          "scenic",
+          "福津",
+          "touring"
+        ],
+        "description": "福津の代表的な神社。参道の立ち寄り店や季節行事と組み合わせやすく、福岡北部の海沿いルートで目的地にしやすい。",
+        "images": []
+      },
+      "sources": [
+        "http://www.miyajidake.or.jp/",
+        "https://munakata-fukutsu-koga.goguynet.jp/category/cat_event/"
+      ]
+    }
+  ]
+}
