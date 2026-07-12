@@ -44,5 +44,22 @@
       "https://kurozurestaurant.com/"
     ],
     "researchNote": "公式サイトで日本初の黒酢レストラン、壷畑見学、2026年6月・7月のお知らせ、住所、営業時間を確認。既存データには同名なし。"
+  },
+  {
+    "id": "gourmet-arita-cafe-useum",
+    "name": "CAFE USEUM ARITA",
+    "category": "gourmet",
+    "lat": 33.188834,
+    "lng": 129.896754,
+    "area": "佐賀県",
+    "tags": ["cafe", "有田", "有田焼", "ヴィーガン", "museum", "new", "touring"],
+    "description": "佐賀県立九州陶磁文化館内に2026年2月に開いたミュージアムカフェ。地元野菜を地元のやきもので味わうヴィーガン料理が特徴で、有田焼鑑賞と食事を一度に楽しめる。無料駐車場310台があり、波佐見・有田方面のツーリング目的地として立ち寄りやすい。",
+    "images": [],
+    "sources": [
+      "https://saga-museum.jp/ceramic/news/2026/02/004885.html",
+      "https://saga-museum.jp/ceramic/access/parking.html",
+      "https://saga.goguynet.jp/2026/02/14/sagakennishimatsuuragunaritacho/"
+    ],
+    "researchNote": "佐賀県立九州陶磁文化館公式で2026年2月17日の営業開始告知、提供内容、所在地を確認。公式駐車場は無料310台。既存のdata/kyushu-spots.jsonと週次データを名称・有田エリア・カテゴリで検索し、同名および九州陶磁文化館の登録なし。緯度経度は施設座標を採用。"
   }
 ]
