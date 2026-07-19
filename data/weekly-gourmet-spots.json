@@ -61,5 +61,58 @@
       "https://saga.goguynet.jp/2026/02/14/sagakennishimatsuuragunaritacho/"
     ],
     "researchNote": "佐賀県立九州陶磁文化館公式で2026年2月17日の営業開始告知、提供内容、所在地を確認。公式駐車場は無料310台。既存のdata/kyushu-spots.jsonと週次データを名称・有田エリア・カテゴリで検索し、同名および九州陶磁文化館の登録なし。緯度経度は施設座標を採用。"
+  },
+  {
+    "id": "gourmet-arao-tsuchinine",
+    "name": "発酵Cafe 土にね。",
+    "category": "gourmet",
+    "lat": 32.98831062,
+    "lng": 130.47825663,
+    "area": "熊本県",
+    "tags": ["cafe", "荒尾", "発酵", "糀", "発酵花籠ランチ", "new", "parking", "touring"],
+    "description": "2026年7月2日に荒尾市で開店した、糀や発酵調味料を使う昼営業の発酵カフェ。発酵花籠ランチ、発酵ローストビーフ丼、発酵ビビンバなど目的地にしやすい個性があり、駐車場も確認できる。大牟田・荒尾方面のランチ目的ツーリングに向く。",
+    "images": [],
+    "sources": [
+      "https://chikugo-ikoi.com/tsuchinine-open/",
+      "https://www.instagram.com/tsuchinine/",
+      "https://map.yahoo.co.jp/v3/place/jK7Wd8qIREo"
+    ],
+    "researchNote": "2026年7月1日付の地域メディアで7月2日開店、住所、営業時間、駐車場、発酵メニューを確認。公式Instagramへの導線も確認。割烹居酒屋 徳蔵での間借り昼営業。data/kyushu-spots.jsonの既存gourmetおよびweekly-gourmet-spots.jsonを名称・荒尾エリア・座標で確認し、同名・150m以内の同カテゴリ登録なし。"
+  },
+  {
+    "id": "gourmet-miyazaki-pot-au-feu-cafe",
+    "name": "カフェ ポ・ト・フー",
+    "category": "gourmet",
+    "lat": 31.93610406,
+    "lng": 131.41817135,
+    "area": "宮崎県",
+    "tags": ["cafe", "宮崎神宮", "文化公園", "クレープ", "ホットサンド", "terrace", "new", "parking", "touring"],
+    "description": "文化公園前で親しまれたフレンチを事業承継し、2026年3月にカフェとして再始動。米粉クレープ、焼き立てパン、ホットサンド、季節のドリンクがあり、文化公園散策と組み合わせやすい。テラス席と3台分の駐車場があり、宮崎市北部の軽食休憩に使いやすい。",
+    "images": [],
+    "sources": [
+      "https://townmiyazaki.ne.jp/hot_potaufeu_202605/",
+      "https://www.umk.co.jp/news/?date=20260622&id=33341",
+      "https://www.instagram.com/potaufeu_2026/",
+      "https://map.yahoo.co.jp/v3/place/vTlTTXzsO3s"
+    ],
+    "researchNote": "2026年5月の地域グルメメディアと6月22日のUMKテレビ宮崎で、営業継続、新メニュー、所在地、駐車場3台を確認。旧フレンチ店舗の事業承継後の新カフェとして登録。data/kyushu-spots.jsonと週次データに同名・宮崎市神宮西の近接gourmet登録なし。"
+  },
+  {
+    "id": "gourmet-hirado-the-terras-cafe",
+    "name": "The曜terraceカフェ",
+    "category": "gourmet",
+    "lat": 33.37185789,
+    "lng": 129.55301498,
+    "area": "長崎県",
+    "tags": ["cafe", "平戸", "城下町", "カステラソフト", "ごちゃづけ", "albergo-diffuso", "new", "touring"],
+    "description": "江戸期の梁を残した米蔵を再生し、2025年6月に開いた平戸城下町のカフェ。カステラを練り込んだソフトクリームや平戸の『ごちゃづけ』を味わえ、平戸城・教会・商店街を巡るツーリングの街歩き拠点になる。",
+    "images": [],
+    "sources": [
+      "https://www.hirado-net.com/purpose/detail.php?c=15&id=120",
+      "https://hirado-net.com/topics/detail.php?id=4",
+      "https://thteteracce.booking.chillnn.com/",
+      "https://map.yahoo.co.jp/v3/place/qZKYBcve-uo"
+    ],
+    "researchNote": "平戸観光協会で所在地、カステラソフト、ごちゃづけ、施設の営業掲載を確認。2026年4月更新のアルベルゴ・ディフーゾタウン案内にも飲食店として掲載されており営業継続を確認。カフェ専用駐車場は無しの案内だが、歴史建築・平戸名物・城下町散策の目的地性を優先。data/kyushu-spots.jsonと週次データに同名・浦の町周辺の同カテゴリ登録なし。"
   }
 ]
