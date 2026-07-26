@@ -1,0 +1,79 @@
+[
+  {
+    "id": "gourmet-kamitonno-coffee-roastery",
+    "name": "カミトンノ珈琲焙煎所",
+    "category": "gourmet",
+    "lat": 33.766616,
+    "lng": 130.771182,
+    "area": "福岡県",
+    "tags": ["famous", "new_open", "coffee", "roastery", "cafe", "parking", "福岡県", "gourmet"],
+    "description": "2026年7月に直方市上頓野で開業した珈琲焙煎所。郊外の一軒店で、龍王峡や筑豊方面を走るルートのコーヒー休憩目的地に向く。旧店舗時代に駐車場利用実績がある場所だが、出発前に現店舗の営業日と駐車方法を確認する。",
+    "images": []
+  },
+  {
+    "id": "gourmet-manbo-yobuko-morning-market",
+    "name": "萬坊 呼子朝市通り店",
+    "category": "gourmet",
+    "lat": 33.537135,
+    "lng": 129.894643,
+    "area": "佐賀県",
+    "tags": ["famous", "local_food", "squid", "ika_shumai", "takeout", "morning_market", "佐賀県", "gourmet"],
+    "description": "呼子名物いかしゅうまいを蒸したてで味わえる朝市通りのテイクアウト店。呼子・波戸岬方面ツーリングの食目的地として使いやすい。専用駐車場はないため、呼子朝市周辺の公共駐車場を利用する。",
+    "images": []
+  },
+  {
+    "id": "gourmet-cafe-beryl",
+    "name": "cafe BERYL",
+    "category": "gourmet",
+    "lat": 32.860282,
+    "lng": 129.939007,
+    "area": "長崎県",
+    "tags": ["famous", "new_open", "pizza", "local_citrus", "sea_view", "cafe", "長崎県", "gourmet"],
+    "description": "2026年4月にJR大草駅前へ開業した、大村湾を望む石窯ピザのカフェ。伊木力みかん酵母の生地や地域の柑橘を生かした甘味が特徴で、多良見・大村湾沿岸ルートの景色込みの食目的地に向く。",
+    "images": []
+  },
+  {
+    "id": "gourmet-ummmia-coffee-oyatsu",
+    "name": "ummmia coffee and oyatsu",
+    "category": "gourmet",
+    "lat": 32.6809,
+    "lng": 130.98774,
+    "area": "熊本県",
+    "tags": ["famous", "new_open", "coffee", "pancake", "cafe", "tsujun_bridge", "takeout", "熊本県", "gourmet"],
+    "description": "通潤橋近くで営業してきたコーヒーと手作りおやつの店が、2026年7月に山都町下市の常設店舗として開業。山都・高千穂方面へ抜ける山間ルートで、名所散策と組み合わせやすい休憩目的地。混雑時の利用制限や不定休は事前確認推奨。",
+    "images": []
+  },
+  {
+    "id": "gourmet-cafe-procione",
+    "name": "Cafe Procione",
+    "category": "gourmet",
+    "lat": 33.02929,
+    "lng": 131.230171,
+    "area": "大分県",
+    "tags": ["famous", "coffee", "hot_sand", "cafe", "viewpoint", "plateau", "parking", "大分県", "gourmet"],
+    "description": "久住高原から阿蘇五岳とくじゅう連山を望める絶景カフェ。コーヒーやホットサンドを楽しめ、駐車場もあるため、やまなみ・久住方面を走るツーリングの明確な休憩目的地になる。",
+    "images": []
+  },
+  {
+    "id": "gourmet-nosari-shiiba",
+    "name": "のさり",
+    "category": "gourmet",
+    "lat": 32.467761,
+    "lng": 131.158942,
+    "area": "宮崎県",
+    "tags": ["famous", "new_open", "local_food", "game_meat", "venison", "mountain", "宮崎県", "gourmet"],
+    "description": "2026年7月に椎葉村上椎葉地区で開業した、鹿や猪など里山の恵みを火で仕上げるレストラン。山深い椎葉を訪れる理由が明確で、九州山地の長距離ツーリングに地域食の主目的地を加えられる。",
+    "images": []
+  },
+  {
+    "id": "gourmet-bread-espresso-tenmonkan",
+    "name": "パンとエスプレッソと 天文館",
+    "category": "gourmet",
+    "lat": 31.593688,
+    "lng": 130.557672,
+    "area": "鹿児島県",
+    "tags": ["famous", "new_open", "bakery", "coffee", "breakfast", "cafe", "鹿児島県", "gourmet"],
+    "description": "2026年7月に鹿児島・金生町へ開業したベーカリーカフェ。朝から焼きたてパンとコーヒーを利用でき、桜島フェリーや鹿児島市街を起点・終点にするルートの朝食候補に向く。中心市街地のため二輪駐車場所は事前確認推奨。",
+    "images": []
+  }
+]
