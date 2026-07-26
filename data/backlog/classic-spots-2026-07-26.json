@@ -1,0 +1,79 @@
+[
+  {
+    "id": "scenic-hiraodai",
+    "name": "平尾台",
+    "category": "scenic",
+    "lat": 33.7725,
+    "lng": 130.902,
+    "area": "福岡県",
+    "tags": ["karst", "plateau", "viewpoint", "road", "福岡県", "scenic"],
+    "description": "石灰岩が点在するカルスト台地と高原道路を楽しめる、北九州方面の定番ツーリング目的地。",
+    "images": []
+  },
+  {
+    "id": "scenic-yutoku-inari-shrine",
+    "name": "祐徳稲荷神社",
+    "category": "scenic",
+    "lat": 33.074,
+    "lng": 130.109,
+    "area": "佐賀県",
+    "tags": ["shrine", "culture", "viewpoint", "佐賀県", "scenic"],
+    "description": "朱色の社殿と門前町を目的地にでき、有明海沿岸や太良方面と組み合わせやすい文化系スポット。",
+    "images": []
+  },
+  {
+    "id": "road-ikitsuki-sunset-way",
+    "name": "生月サンセットウェイ",
+    "category": "road",
+    "lat": 33.386,
+    "lng": 129.427,
+    "area": "長崎県",
+    "tags": ["coastal_road", "island", "sunset", "viewpoint", "長崎県", "road"],
+    "description": "生月島西岸の海と断崖を眺めながら走る道路。道そのものを主目的にできる長崎県北部の代表的ルート。",
+    "images": []
+  },
+  {
+    "id": "scenic-daikanbo",
+    "name": "大観峰",
+    "category": "scenic",
+    "lat": 32.9367,
+    "lng": 131.0814,
+    "area": "熊本県",
+    "tags": ["aso", "viewpoint", "caldera", "road", "熊本県", "scenic"],
+    "description": "阿蘇五岳とカルデラを望む外輪山の代表的展望地。ミルクロード方面の主目的地に向く。",
+    "images": []
+  },
+  {
+    "id": "scenic-harajiri-falls",
+    "name": "原尻の滝",
+    "category": "scenic",
+    "lat": 32.9636,
+    "lng": 131.4475,
+    "area": "大分県",
+    "tags": ["waterfall", "viewpoint", "roadside_station_nearby", "大分県", "scenic"],
+    "description": "豊後大野を代表する幅広い滝。阿蘇・竹田方面からの周回ルートに組み込みやすい。",
+    "images": []
+  },
+  {
+    "id": "scenic-toi-cape",
+    "name": "都井岬",
+    "category": "scenic",
+    "lat": 31.3679,
+    "lng": 131.3453,
+    "area": "宮崎県",
+    "tags": ["cape", "wild_horse", "coast", "viewpoint", "road", "宮崎県", "scenic"],
+    "description": "野生馬と日向灘の眺望を楽しめる日南海岸南端の岬。長距離ツーリングの達成感がある目的地。",
+    "images": []
+  },
+  {
+    "id": "scenic-sata-misaki",
+    "name": "佐多岬",
+    "category": "scenic",
+    "lat": 30.995,
+    "lng": 130.661,
+    "area": "鹿児島県",
+    "tags": ["cape", "southernmost", "viewpoint", "road", "鹿児島県", "scenic"],
+    "description": "九州本島最南端を目指す、大隅半島の長距離ツーリングに明確な目的を与える岬。",
+    "images": []
+  }
+]
